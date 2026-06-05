@@ -29,6 +29,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    setIsCheckingAuth(true);
+    setAuthMessage("");
 
     async function checkAuth() {
       const supabase = getSupabaseBrowserClient();
@@ -62,7 +64,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setRole(currentRole);
 
       if (pathname === "/admin" && currentRole !== "teacher_admin") {
-        router.replace("/dashboard");
+        setAuthMessage("Only teacher/admin accounts can access the admin portal.");
+        setIsCheckingAuth(false);
         return;
       }
 
