@@ -1,24 +1,41 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, CalendarDays, CheckCircle2, ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader, ProgressBar } from "@/components/ui";
 import { calculateAps, calculateAverage, subjectRisk } from "@/lib/aps";
 import { matchBursaries } from "@/lib/bursaries";
+import { loadApsRules, loadBursaries, loadPastPaperQuestions } from "@/lib/content-data";
 import { sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
+import type { ApsRule, Bursary, PastPaperQuestion } from "@/lib/types";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
 import { formatDate } from "@/lib/utils";
 
 export default function DashboardPage() {
   const { profile, isDemo, isLoading, error } = useLearnerProfile();
+  const [apsRules, setApsRules] = useState<ApsRule[]>(sampleApsRules);
+  const [bursaries, setBursaries] = useState<Bursary[]>(sampleBursaries);
+  const [questions, setQuestions] = useState<PastPaperQuestion[]>(sampleQuestions);
   const plan = generateLocalStudyPlan(profile);
-  const bursaryMatches = matchBursaries(profile, sampleBursaries).slice(0, 3);
-  const aps = calculateAps(profile.subjects, sampleApsRules[0]);
+  const bursaryMatches = matchBursaries(profile, bursaries).slice(0, 3);
+  const selectedRule = apsRules[0] ?? sampleApsRules[0];
+  const aps = calculateAps(profile.subjects, selectedRule);
   const average = calculateAverage(profile.subjects);
   const progress = profile.subjects.map((subject) => ({ name: subject.name.split(" ")[0], mark: subject.currentMark, target: subject.targetMark }));
   const atRisk = profile.subjects.filter((subject) => subjectRisk(subject.currentMark, subject.targetMark) !== "Safe");
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    Promise.all([loadApsRules(supabase), loadBursaries(supabase), loadPastPaperQuestions(supabase)]).then(([rules, loadedBursaries, loadedQuestions]) => {
+      setApsRules(rules);
+      setBursaries(loadedBursaries);
+      setQuestions(loadedQuestions);
+    });
+  }, []);
 
   return (
     <AppShell>
@@ -53,7 +70,7 @@ export default function DashboardPage() {
             <Metric label="Average" value={`${average}%`} />
             <Metric label="APS" value={String(aps)} />
           </div>
-          <p className="mt-4 text-sm leading-6 text-ink/65">Using configurable sample rule: {sampleApsRules[0].programmeName}.</p>
+          <p className="mt-4 text-sm leading-6 text-ink/65">Using configurable rule: {selectedRule.programmeName}.</p>
         </Card>
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -77,7 +94,7 @@ export default function DashboardPage() {
         <Card>
           <h2 className="text-xl font-black">Recommended questions</h2>
           <div className="mt-4 space-y-3">
-            {sampleQuestions.map((question) => (
+            {questions.slice(0, 3).map((question) => (
               <a key={question.id} href={question.sourceUrl} target="_blank" className="block rounded-lg border border-ink/10 p-3 hover:bg-chalk">
                 <p className="font-bold">{question.subject}</p>
                 <p className="text-sm text-ink/65">{question.topic} - {question.year} {question.paperNumber}</p>
@@ -104,7 +121,7 @@ export default function DashboardPage() {
         <Card>
           <h2 className="flex items-center gap-2 text-xl font-black"><CalendarDays size={20} /> Upcoming deadlines</h2>
           <div className="mt-4 space-y-3">
-            {sampleBursaries.map((bursary) => (
+            {bursaries.slice(0, 4).map((bursary) => (
               <a key={bursary.id} className="flex items-center justify-between gap-3 rounded-lg bg-chalk p-3 text-sm" href={bursary.applicationUrl} target="_blank">
                 <span>{bursary.name}</span>
                 <span className="inline-flex items-center gap-1 font-bold text-sky">{formatDate(bursary.deadline)} <ExternalLink size={14} /></span>

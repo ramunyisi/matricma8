@@ -175,7 +175,8 @@ function mapProfileRow(row: LearnerProfileRow): LearnerProfile {
     .map((item) => {
       const subject = Array.isArray(item.subjects) ? item.subjects[0] : item.subjects;
       return {
-        id: subject?.id ?? item.id,
+        id: item.id,
+        subjectId: subject?.id,
         name: subject?.name ?? "Unknown subject",
         grade: subject?.grade ?? row.grade,
         currentMark: Number(item.current_mark),
@@ -196,4 +197,35 @@ function mapProfileRow(row: LearnerProfileRow): LearnerProfile {
     examDate: row.exam_date ?? demoProfile.examDate,
     subjects
   };
+}
+
+export async function updateLearnerSubjectMarks(supabase: SupabaseClient, profileId: string, subjects: LearnerSubject[]) {
+  for (const subject of subjects) {
+    const { error } = await supabase
+      .from("learner_subjects")
+      .update({
+        current_mark: subject.currentMark,
+        target_mark: subject.targetMark
+      })
+      .eq("id", subject.id)
+      .eq("learner_id", profileId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (subject.subjectId) {
+      const { error: markError } = await supabase.from("marks").insert({
+        learner_id: profileId,
+        subject_id: subject.subjectId,
+        assessment_type: "APS update",
+        mark: subject.currentMark,
+        assessment_date: new Date().toISOString().slice(0, 10)
+      });
+
+      if (markError) {
+        throw new Error(markError.message);
+      }
+    }
+  }
 }

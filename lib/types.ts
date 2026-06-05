@@ -6,6 +6,7 @@ export type InternetAccessLevel = "low" | "medium" | "high";
 
 export type LearnerSubject = {
   id: string;
+  subjectId?: string;
   name: string;
   grade: 10 | 11 | 12;
   currentMark: number;

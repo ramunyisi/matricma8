@@ -1,19 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, FileQuestion, PenLine } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
+import { loadPastPaperQuestions } from "@/lib/content-data";
 import { filterPastPaperQuestions } from "@/lib/past-papers";
 import { sampleQuestions, sampleSubjects } from "@/lib/sample-data";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
+import type { PastPaperQuestion } from "@/lib/types";
 
 export default function PastPapersPage() {
+  const [allQuestions, setAllQuestions] = useState<PastPaperQuestion[]>(sampleQuestions);
+  const [grade, setGrade] = useState(12);
+  const [year, setYear] = useState<number | undefined>(undefined);
   const [subject, setSubject] = useState("All");
   const [topic, setTopic] = useState("All");
   const [difficulty, setDifficulty] = useState("All");
   const [mode, setMode] = useState<"practice" | "marking">("practice");
-  const topics = Array.from(new Set(sampleQuestions.map((question) => question.topic)));
-  const questions = useMemo(() => filterPastPaperQuestions(sampleQuestions, { grade: 12, subject, topic, difficulty }), [subject, topic, difficulty]);
+  const topics = Array.from(new Set(allQuestions.map((question) => question.topic)));
+  const subjects = Array.from(new Set([...sampleSubjects, ...allQuestions.map((question) => question.subject)]));
+  const years = Array.from(new Set(allQuestions.map((question) => question.year))).sort((a, b) => b - a);
+  const questions = useMemo(() => filterPastPaperQuestions(allQuestions, { grade, subject, topic, difficulty, year }), [allQuestions, grade, subject, topic, difficulty, year]);
+
+  useEffect(() => {
+    loadPastPaperQuestions(getSupabaseBrowserClient()).then(setAllQuestions);
+  }, []);
 
   return (
     <AppShell>
@@ -22,11 +34,11 @@ export default function PastPapersPage() {
       </PageHeader>
       <Card className="mb-4">
         <div className="grid gap-3 md:grid-cols-5">
-          <label className="text-sm font-bold">Grade<select className="input" defaultValue="12"><option>10</option><option>11</option><option>12</option></select></label>
-          <label className="text-sm font-bold">Subject<select className="input" value={subject} onChange={(event) => setSubject(event.target.value)}><option>All</option>{sampleSubjects.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label className="text-sm font-bold">Grade<select className="input" value={grade} onChange={(event) => setGrade(Number(event.target.value))}><option value={10}>10</option><option value={11}>11</option><option value={12}>12</option></select></label>
+          <label className="text-sm font-bold">Subject<select className="input" value={subject} onChange={(event) => setSubject(event.target.value)}><option>All</option>{subjects.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label className="text-sm font-bold">Topic<select className="input" value={topic} onChange={(event) => setTopic(event.target.value)}><option>All</option>{topics.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label className="text-sm font-bold">Difficulty<select className="input" value={difficulty} onChange={(event) => setDifficulty(event.target.value)}><option>All</option><option>easy</option><option>medium</option><option>hard</option></select></label>
-          <label className="text-sm font-bold">Paper year<select className="input" defaultValue="2024"><option>2024</option><option>2023</option></select></label>
+          <label className="text-sm font-bold">Paper year<select className="input" value={year ?? ""} onChange={(event) => setYear(event.target.value ? Number(event.target.value) : undefined)}><option value="">All</option>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         </div>
       </Card>
       <div className="mb-4 inline-flex rounded-lg border border-ink/10 bg-white p-1">

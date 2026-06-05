@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 import { BookOpen, Bot, Calculator, GraduationCap, LayoutDashboard, LogOut, Menu, Search, ShieldCheck } from "lucide-react";
 import { getLearnerProfile } from "@/lib/learner-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import type { Role } from "@/lib/types";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -19,6 +20,7 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
   const router = useRouter();
@@ -44,7 +46,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       setUser(data.user);
 
-      if (pathname !== "/onboarding") {
+      const { data: appUser, error: roleError } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+
+      if (roleError) {
+        throw new Error(roleError.message);
+      }
+
+      const currentRole = appUser.role as Role;
+      setRole(currentRole);
+
+      if (pathname === "/admin" && currentRole !== "teacher_admin") {
+        router.replace("/dashboard");
+        return;
+      }
+
+      if (currentRole === "learner" && pathname !== "/onboarding") {
         const profile = await getLearnerProfile(supabase, data.user.id);
         if (!profile) {
           router.replace("/onboarding");
@@ -89,7 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu size={20} />
           </button>
           <nav className="hidden items-center gap-1 md:flex">
-            {navItems.map((item) => {
+            {navItems.filter((item) => item.href !== "/admin" || role === "teacher_admin").map((item) => {
               const Icon = item.icon;
               return (
                 <Link
@@ -130,7 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-white px-2 py-2 md:hidden">
         <div className="grid grid-cols-5 gap-1">
-          {navItems.slice(0, 5).map((item) => {
+          {navItems.slice(0, 5).filter((item) => item.href !== "/admin" || role === "teacher_admin").map((item) => {
             const Icon = item.icon;
             return (
               <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold text-ink/70">

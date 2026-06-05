@@ -1,29 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, SlidersHorizontal } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { matchBursaries, isClosingSoon } from "@/lib/bursaries";
+import { loadBursaries } from "@/lib/content-data";
 import { provinces, sampleBursaries } from "@/lib/sample-data";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
+import type { Bursary } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
 export default function BursariesPage() {
   const { profile, isDemo } = useLearnerProfile();
+  const [bursaries, setBursaries] = useState<Bursary[]>(sampleBursaries);
   const [field, setField] = useState("All");
   const [province, setProvince] = useState("All");
   const [openNow, setOpenNow] = useState(true);
   const [closingSoon, setClosingSoon] = useState(false);
   const matches = useMemo(() => {
-    return matchBursaries(profile, sampleBursaries, new Date("2026-06-05")).filter((match) => {
+    return matchBursaries(profile, bursaries, new Date("2026-06-05")).filter((match) => {
       if (field !== "All" && match.bursary.fieldOfStudy !== field) return false;
       if (province !== "All" && !match.bursary.provinceRequirements.includes("All provinces") && !match.bursary.provinceRequirements.includes(province)) return false;
       if (openNow && new Date(match.bursary.deadline) < new Date("2026-06-05")) return false;
       if (closingSoon && !isClosingSoon(match.bursary.deadline, new Date("2026-06-05"))) return false;
       return true;
     });
-  }, [field, province, openNow, closingSoon, profile]);
+  }, [field, province, openNow, closingSoon, profile, bursaries]);
+
+  useEffect(() => {
+    loadBursaries(getSupabaseBrowserClient()).then(setBursaries);
+  }, []);
 
   return (
     <AppShell>
