@@ -1,0 +1,72 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { ExternalLink, FileQuestion, PenLine } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { Badge, Card, PageHeader } from "@/components/ui";
+import { filterPastPaperQuestions } from "@/lib/past-papers";
+import { sampleQuestions, sampleSubjects } from "@/lib/sample-data";
+
+export default function PastPapersPage() {
+  const [subject, setSubject] = useState("All");
+  const [topic, setTopic] = useState("All");
+  const [difficulty, setDifficulty] = useState("All");
+  const [mode, setMode] = useState<"practice" | "marking">("practice");
+  const topics = Array.from(new Set(sampleQuestions.map((question) => question.topic)));
+  const questions = useMemo(() => filterPastPaperQuestions(sampleQuestions, { grade: 12, subject, topic, difficulty }), [subject, topic, difficulty]);
+
+  return (
+    <AppShell>
+      <PageHeader title="Past-Paper Navigator" eyebrow="DBE-linked metadata">
+        The MVP stores paper metadata, page numbers, topics, memo links, and source URLs first. It does not copy copyrighted paper content.
+      </PageHeader>
+      <Card className="mb-4">
+        <div className="grid gap-3 md:grid-cols-5">
+          <label className="text-sm font-bold">Grade<select className="input" defaultValue="12"><option>10</option><option>11</option><option>12</option></select></label>
+          <label className="text-sm font-bold">Subject<select className="input" value={subject} onChange={(event) => setSubject(event.target.value)}><option>All</option>{sampleSubjects.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label className="text-sm font-bold">Topic<select className="input" value={topic} onChange={(event) => setTopic(event.target.value)}><option>All</option>{topics.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label className="text-sm font-bold">Difficulty<select className="input" value={difficulty} onChange={(event) => setDifficulty(event.target.value)}><option>All</option><option>easy</option><option>medium</option><option>hard</option></select></label>
+          <label className="text-sm font-bold">Paper year<select className="input" defaultValue="2024"><option>2024</option><option>2023</option></select></label>
+        </div>
+      </Card>
+      <div className="mb-4 inline-flex rounded-lg border border-ink/10 bg-white p-1">
+        <button onClick={() => setMode("practice")} className={`rounded-md px-4 py-2 text-sm font-black ${mode === "practice" ? "bg-veld text-white" : "text-ink/65"}`}>Practice mode</button>
+        <button onClick={() => setMode("marking")} className={`rounded-md px-4 py-2 text-sm font-black ${mode === "marking" ? "bg-veld text-white" : "text-ink/65"}`}>Marking mode</button>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {questions.map((question) => (
+          <Card key={question.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Badge tone={question.difficulty === "hard" ? "risk" : question.difficulty === "medium" ? "watch" : "safe"}>{question.difficulty}</Badge>
+                <h2 className="mt-3 text-xl font-black">{question.subject}</h2>
+                <p className="text-sm text-ink/65">{question.topic}</p>
+              </div>
+              {mode === "practice" ? <FileQuestion className="text-veld" /> : <PenLine className="text-sky" />}
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <Info label="Year" value={String(question.year)} />
+              <Info label="Paper" value={question.paperNumber} />
+              <Info label="Marks" value={String(question.marks)} />
+              <Info label="Pages" value={`Q ${question.pageNumber}, memo ${question.memoPageNumber}`} />
+            </dl>
+            <div className="mt-4 rounded-lg bg-chalk p-3 text-sm leading-6 text-ink/70">
+              {mode === "practice"
+                ? "AI explanation placeholder: read the official question from the linked DBE paper, attempt it, then request a step-by-step explanation."
+                : "Marking mode placeholder: compare your answer to the official memo link and capture which CAPS skill caused errors."}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a className="focus-ring inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-black text-white" href={question.paperUrl} target="_blank">Paper source <ExternalLink size={14} /></a>
+              <a className="focus-ring inline-flex items-center gap-2 rounded-lg border border-ink/15 px-3 py-2 text-sm font-black" href={question.memoUrl} target="_blank">Memo link <ExternalLink size={14} /></a>
+            </div>
+          </Card>
+        ))}
+      </div>
+      <style jsx>{`.input{margin-top:.5rem;width:100%;border-radius:.5rem;border:1px solid rgb(23 33 43 / .15);padding:.75rem;background:white}`}</style>
+    </AppShell>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div><dt className="font-bold text-ink/55">{label}</dt><dd className="mt-1 font-semibold">{value}</dd></div>;
+}
