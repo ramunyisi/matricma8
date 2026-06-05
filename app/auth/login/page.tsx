@@ -2,14 +2,18 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { GraduationCap, LogIn } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 export default function LoginPage() {
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setIsSubmitting(true);
     const form = new FormData(event.currentTarget);
     try {
       const supabase = getSupabaseBrowserClient();
@@ -21,16 +25,22 @@ export default function LoginPage() {
         email: String(form.get("email")),
         password: String(form.get("password"))
       });
-      setMessage(error ? error.message : "Logged in. Go to your dashboard.");
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      router.replace("/dashboard");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Supabase is not configured yet.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
-  return <AuthCard title="Welcome back" mode="login" message={message} onSubmit={onSubmit} />;
+  return <AuthCard title="Welcome back" message={message} isSubmitting={isSubmitting} onSubmit={onSubmit} />;
 }
 
-function AuthCard({ title, mode, message, onSubmit }: { title: string; mode: "login"; message: string; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
+function AuthCard({ title, message, isSubmitting, onSubmit }: { title: string; message: string; isSubmitting: boolean; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
   return (
     <main className="grid min-h-screen place-items-center bg-chalk px-4">
       <form onSubmit={onSubmit} className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
@@ -45,8 +55,8 @@ function AuthCard({ title, mode, message, onSubmit }: { title: string; mode: "lo
         <input name="email" type="email" required className="focus-ring mt-2 w-full rounded-lg border border-ink/15 px-3 py-3" />
         <label className="mt-4 block text-sm font-bold">Password</label>
         <input name="password" type="password" required className="focus-ring mt-2 w-full rounded-lg border border-ink/15 px-3 py-3" />
-        <button className="focus-ring mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-black text-white">
-          <LogIn size={18} /> Login
+        <button disabled={isSubmitting} className="focus-ring mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-black text-white disabled:opacity-60">
+          <LogIn size={18} /> {isSubmitting ? "Logging in..." : "Login"}
         </button>
         {message ? <p className="mt-4 rounded-lg bg-chalk p-3 text-sm text-ink/75">{message}</p> : null}
         <p className="mt-5 text-sm text-ink/70">

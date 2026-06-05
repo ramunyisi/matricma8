@@ -2,14 +2,18 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { GraduationCap, UserPlus } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 export default function SignupPage() {
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setIsSubmitting(true);
     const form = new FormData(event.currentTarget);
     try {
       const supabase = getSupabaseBrowserClient();
@@ -22,9 +26,15 @@ export default function SignupPage() {
         password: String(form.get("password")),
         options: { data: { role: form.get("role") } }
       });
-      setMessage(error ? error.message : "Account created. Check email confirmation, then complete onboarding.");
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      router.replace("/onboarding");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Supabase is not configured yet.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -48,8 +58,8 @@ export default function SignupPage() {
         <input name="email" type="email" required className="focus-ring mt-2 w-full rounded-lg border border-ink/15 px-3 py-3" />
         <label className="mt-4 block text-sm font-bold">Password</label>
         <input name="password" type="password" minLength={8} required className="focus-ring mt-2 w-full rounded-lg border border-ink/15 px-3 py-3" />
-        <button className="focus-ring mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-black text-white">
-          <UserPlus size={18} /> Sign up
+        <button disabled={isSubmitting} className="focus-ring mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-black text-white disabled:opacity-60">
+          <UserPlus size={18} /> {isSubmitting ? "Creating account..." : "Sign up"}
         </button>
         {message ? <p className="mt-4 rounded-lg bg-chalk p-3 text-sm text-ink/75">{message}</p> : null}
         <p className="mt-5 text-sm text-ink/70">

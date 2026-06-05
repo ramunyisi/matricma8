@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Card, PageHeader, ProgressBar } from "@/components/ui";
 import { provinces, sampleSubjects } from "@/lib/sample-data";
 
 export default function OnboardingPage() {
   const [selected, setSelected] = useState(["Mathematics", "Physical Sciences", "English Home Language", "Life Sciences"]);
+  const router = useRouter();
   const subjectRows = useMemo(() => selected.map((name, index) => ({ name, current: 45 + index * 6, target: 60 + index * 5 })), [selected]);
 
   return (
@@ -53,7 +55,7 @@ export default function OnboardingPage() {
               </div>
             ))}
           </div>
-          <button className="focus-ring mt-5 w-full rounded-lg bg-veld px-4 py-3 font-black text-white">Save profile</button>
+          <button onClick={() => router.replace("/dashboard")} className="focus-ring mt-5 w-full rounded-lg bg-veld px-4 py-3 font-black text-white">Save profile and go to dashboard</button>
         </Card>
       </div>
       <style jsx>{`
