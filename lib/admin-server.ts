@@ -30,7 +30,7 @@ export async function requireTeacherAdmin(request: Request) {
     .from("users")
     .select("role")
     .eq("id", userData.user.id)
-    .single();
+    .maybeSingle();
 
   if (roleError || appUser?.role !== "teacher_admin") {
     return { ok: false as const, status: 403, error: "Teacher/admin role required." };

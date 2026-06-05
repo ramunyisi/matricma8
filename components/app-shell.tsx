@@ -51,13 +51,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         .from("users")
         .select("role")
         .eq("id", data.user.id)
-        .single();
+        .maybeSingle();
 
-      if (roleError) {
+      if (roleError && roleError.code !== "PGRST116") {
         throw new Error(roleError.message);
       }
 
-      const currentRole = appUser.role as Role;
+      const metadataRole = data.user.user_metadata?.role as Role | undefined;
+      const currentRole = (appUser?.role ?? metadataRole ?? "learner") as Role;
       setRole(currentRole);
 
       if (pathname === "/admin" && currentRole !== "teacher_admin") {

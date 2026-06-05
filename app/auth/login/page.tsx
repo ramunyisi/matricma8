@@ -30,8 +30,9 @@ export default function LoginPage() {
         setMessage(friendlyError(error));
         return;
       }
-      const { data: appUser } = await supabase.from("users").select("role").eq("id", data.user.id).single();
-      router.replace(appUser?.role === "teacher_admin" ? "/admin" : "/dashboard");
+      const { data: appUser } = await supabase.from("users").select("role").eq("id", data.user.id).maybeSingle();
+      const metadataRole = data.user.user_metadata?.role;
+      router.replace((appUser?.role ?? metadataRole) === "teacher_admin" ? "/admin" : "/dashboard");
     } catch (error) {
       setMessage(friendlyError(error, "Supabase is not configured yet."));
     } finally {
