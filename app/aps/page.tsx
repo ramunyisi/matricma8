@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader, ProgressBar } from "@/components/ui";
 import { calculateAps, calculateAverage, estimateFinalMark, evaluateApsRule, simulateWhatIf, subjectRisk } from "@/lib/aps";
 import { demoProfile, sampleApsRules } from "@/lib/sample-data";
+import { useLearnerProfile } from "@/lib/use-learner-profile";
 import type { LearnerSubject } from "@/lib/types";
 
 export default function ApsPage() {
+  const { profile, isDemo } = useLearnerProfile();
   const [subjects, setSubjects] = useState<LearnerSubject[]>(demoProfile.subjects);
   const [whatIfSubject, setWhatIfSubject] = useState(subjects[0].name);
   const [whatIfMark, setWhatIfMark] = useState(60);
@@ -15,9 +17,15 @@ export default function ApsPage() {
   const prediction = evaluateApsRule(subjects, selectedRule);
   const simulation = useMemo(() => simulateWhatIf(subjects, whatIfSubject, whatIfMark, selectedRule), [subjects, whatIfSubject, whatIfMark, selectedRule]);
 
+  useEffect(() => {
+    if (profile.subjects.length === 0) return;
+    setSubjects(profile.subjects);
+    setWhatIfSubject(profile.subjects[0].name);
+  }, [profile]);
+
   return (
     <AppShell>
-      <PageHeader title="Matric / APS Predictor" eyebrow="Configurable rules">
+      <PageHeader title="Matric / APS Predictor" eyebrow={isDemo ? "Configurable sample rules" : "Your saved profile"}>
         APS rules differ by institution and programme. This MVP stores rules as JSON and labels sample data clearly.
       </PageHeader>
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">

@@ -21,13 +21,17 @@ export default function SignupPage() {
         setMessage("Demo mode: Supabase is not configured yet. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local to enable signup.");
         return;
       }
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: String(form.get("email")),
         password: String(form.get("password")),
         options: { data: { role: form.get("role") } }
       });
       if (error) {
         setMessage(error.message);
+        return;
+      }
+      if (!data.session) {
+        setMessage("Account created. Check your email to confirm your account, then log in to complete onboarding.");
         return;
       }
       router.replace("/onboarding");

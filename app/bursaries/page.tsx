@@ -5,27 +5,29 @@ import { ExternalLink, SlidersHorizontal } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { matchBursaries, isClosingSoon } from "@/lib/bursaries";
-import { demoProfile, provinces, sampleBursaries } from "@/lib/sample-data";
+import { provinces, sampleBursaries } from "@/lib/sample-data";
+import { useLearnerProfile } from "@/lib/use-learner-profile";
 import { formatDate } from "@/lib/utils";
 
 export default function BursariesPage() {
+  const { profile, isDemo } = useLearnerProfile();
   const [field, setField] = useState("All");
   const [province, setProvince] = useState("All");
   const [openNow, setOpenNow] = useState(true);
   const [closingSoon, setClosingSoon] = useState(false);
   const matches = useMemo(() => {
-    return matchBursaries(demoProfile, sampleBursaries, new Date("2026-06-05")).filter((match) => {
+    return matchBursaries(profile, sampleBursaries, new Date("2026-06-05")).filter((match) => {
       if (field !== "All" && match.bursary.fieldOfStudy !== field) return false;
       if (province !== "All" && !match.bursary.provinceRequirements.includes("All provinces") && !match.bursary.provinceRequirements.includes(province)) return false;
       if (openNow && new Date(match.bursary.deadline) < new Date("2026-06-05")) return false;
       if (closingSoon && !isClosingSoon(match.bursary.deadline, new Date("2026-06-05"))) return false;
       return true;
     });
-  }, [field, province, openNow, closingSoon]);
+  }, [field, province, openNow, closingSoon, profile]);
 
   return (
     <AppShell>
-      <PageHeader title="Bursary Matcher" eyebrow="Sample data">
+      <PageHeader title="Bursary Matcher" eyebrow={isDemo ? "Sample learner data" : "Your saved profile"}>
         Bursary data here is marked sample data. Production records must be sourced, verified, and refreshed from official provider pages.
       </PageHeader>
       <Card className="mb-4">

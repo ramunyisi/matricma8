@@ -6,23 +6,27 @@ import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader, ProgressBar } from "@/components/ui";
 import { calculateAps, calculateAverage, subjectRisk } from "@/lib/aps";
 import { matchBursaries } from "@/lib/bursaries";
-import { demoProfile, sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
+import { sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
+import { useLearnerProfile } from "@/lib/use-learner-profile";
 import { formatDate } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const plan = generateLocalStudyPlan(demoProfile);
-  const bursaryMatches = matchBursaries(demoProfile, sampleBursaries).slice(0, 3);
-  const aps = calculateAps(demoProfile.subjects, sampleApsRules[0]);
-  const average = calculateAverage(demoProfile.subjects);
-  const progress = demoProfile.subjects.map((subject) => ({ name: subject.name.split(" ")[0], mark: subject.currentMark, target: subject.targetMark }));
-  const atRisk = demoProfile.subjects.filter((subject) => subjectRisk(subject.currentMark, subject.targetMark) !== "Safe");
+  const { profile, isDemo, isLoading, error } = useLearnerProfile();
+  const plan = generateLocalStudyPlan(profile);
+  const bursaryMatches = matchBursaries(profile, sampleBursaries).slice(0, 3);
+  const aps = calculateAps(profile.subjects, sampleApsRules[0]);
+  const average = calculateAverage(profile.subjects);
+  const progress = profile.subjects.map((subject) => ({ name: subject.name.split(" ")[0], mark: subject.currentMark, target: subject.targetMark }));
+  const atRisk = profile.subjects.filter((subject) => subjectRisk(subject.currentMark, subject.targetMark) !== "Safe");
 
   return (
     <AppShell>
-      <PageHeader title="Learner Dashboard" eyebrow="Demo workspace">
+      <PageHeader title="Learner Dashboard" eyebrow={isDemo ? "Demo workspace" : `${profile.grade} learner profile`}>
         Predictions use sample data and must be verified against official university, DBE, and bursary source pages before decisions are made.
       </PageHeader>
+      {isLoading ? <Card className="mb-4">Loading learner profile...</Card> : null}
+      {error ? <Card className="mb-4 border-protea/20 bg-protea/10">{error}</Card> : null}
       <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <Card>
           <div className="flex items-center justify-between gap-3">

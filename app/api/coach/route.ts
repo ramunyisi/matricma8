@@ -13,7 +13,8 @@ const requestSchema = z.discriminatedUnion("type", [
     grade10Mode: z.boolean().optional()
   }),
   z.object({
-    type: z.literal("plan")
+    type: z.literal("plan"),
+    profile: z.any().optional()
   })
 ]);
 
@@ -21,9 +22,10 @@ export async function POST(request: Request) {
   const body = requestSchema.parse(await request.json());
 
   if (body.type === "plan") {
-    const marks = Object.fromEntries(demoProfile.subjects.map((subject) => [subject.name, subject.currentMark]));
-    const targetMarks = Object.fromEntries(demoProfile.subjects.map((subject) => [subject.name, subject.targetMark]));
-    const plan = await generateStudyPlan(demoProfile, demoProfile.subjects, marks, targetMarks);
+    const profile = body.profile ?? demoProfile;
+    const marks = Object.fromEntries(profile.subjects.map((subject: { name: string; currentMark: number }) => [subject.name, subject.currentMark]));
+    const targetMarks = Object.fromEntries(profile.subjects.map((subject: { name: string; targetMark: number }) => [subject.name, subject.targetMark]));
+    const plan = await generateStudyPlan(profile, profile.subjects, marks, targetMarks);
     return NextResponse.json({ result: plan, verified: false });
   }
 

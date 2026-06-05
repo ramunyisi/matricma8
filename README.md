@@ -28,11 +28,21 @@ cp .env.example .env.local
 
 3. Add Supabase and OpenAI keys in `.env.local`.
 
-4. Create the database schema in Supabase SQL editor using:
+4. Create the database schema.
+
+Option A: paste this file into the Supabase SQL editor and run it:
 
 ```text
 supabase/schema.sql
 ```
+
+Option B: if you use the Supabase CLI, apply the migration:
+
+```bash
+supabase db push
+```
+
+The first seed will fail with `Could not find the table 'public.subjects'` until this schema exists in your Supabase project.
 
 5. Seed sample data using either `supabase/seed.sql` in SQL editor or:
 

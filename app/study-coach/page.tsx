@@ -4,10 +4,12 @@ import { useState } from "react";
 import { Bot, CalendarPlus, Send } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
-import { demoProfile, sampleQuestions } from "@/lib/sample-data";
+import { sampleQuestions } from "@/lib/sample-data";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
+import { useLearnerProfile } from "@/lib/use-learner-profile";
 
 export default function StudyCoachPage() {
+  const { profile, isDemo } = useLearnerProfile();
   const [question, setQuestion] = useState("Please explain functions and graphs simply.");
   const [grade10Mode, setGrade10Mode] = useState(true);
   const [answer, setAnswer] = useState("Ask a CAPS topic question or generate a 7-day study plan.");
@@ -21,7 +23,7 @@ export default function StudyCoachPage() {
       body: JSON.stringify({
         type: "explain",
         subject: "Mathematics",
-        grade: demoProfile.grade,
+        grade: profile.grade,
         topic: "Functions and graphs",
         question,
         grade10Mode
@@ -35,11 +37,11 @@ export default function StudyCoachPage() {
   async function plan() {
     setLoading(true);
     try {
-      const response = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "plan" }) });
+      const response = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "plan", profile }) });
       const data = await response.json();
       setAnswer(JSON.stringify(data.result, null, 2));
     } catch {
-      setAnswer(JSON.stringify(generateLocalStudyPlan(demoProfile), null, 2));
+      setAnswer(JSON.stringify(generateLocalStudyPlan(profile), null, 2));
     }
     setLoading(false);
   }
@@ -53,7 +55,7 @@ export default function StudyCoachPage() {
         <Card>
           <div className="flex items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-xl font-black"><Bot className="text-veld" /> Ask a CAPS question</h2>
-            <Badge tone="sample">Demo profile</Badge>
+            <Badge tone="sample">{isDemo ? "Demo profile" : `Grade ${profile.grade}`}</Badge>
           </div>
           <textarea className="focus-ring mt-4 min-h-36 w-full rounded-lg border border-ink/15 p-3" value={question} onChange={(event) => setQuestion(event.target.value)} />
           <label className="mt-3 flex items-center gap-2 text-sm font-bold">
