@@ -99,8 +99,8 @@ export async function loadPastPaperQuestions(supabase: SupabaseClient | null): P
 
   if (error || !data || data.length === 0) return sampleQuestions;
 
-  return (data as unknown as PaperQuestionRow[])
-    .map((row) => {
+  const mapped = (data as unknown as PaperQuestionRow[])
+    .map((row): PastPaperQuestion | null => {
       const paper = Array.isArray(row.past_papers) ? row.past_papers[0] : row.past_papers;
       const topic = Array.isArray(row.topics) ? row.topics[0] : row.topics;
       const subject = Array.isArray(paper?.subjects) ? paper?.subjects[0] : paper?.subjects;
@@ -108,6 +108,7 @@ export async function loadPastPaperQuestions(supabase: SupabaseClient | null): P
 
       return {
         id: row.id,
+        questionNumber: row.question_number,
         grade: paper.grade,
         subject: subject.name,
         topic: topic?.name ?? "General revision",
@@ -125,4 +126,6 @@ export async function loadPastPaperQuestions(supabase: SupabaseClient | null): P
       } satisfies PastPaperQuestion;
     })
     .filter((question): question is PastPaperQuestion => Boolean(question));
+
+  return mapped;
 }

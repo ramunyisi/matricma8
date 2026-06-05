@@ -79,6 +79,7 @@ export type BursaryMatch = {
 
 export type PastPaperQuestion = {
   id: string;
+  questionNumber?: string;
   grade: 10 | 11 | 12;
   subject: string;
   topic: string;

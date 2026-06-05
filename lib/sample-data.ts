@@ -140,6 +140,7 @@ export const sampleBursaries: Bursary[] = [
 export const sampleQuestions: PastPaperQuestion[] = [
   {
     id: "maths-2024-p1-fn",
+    questionNumber: "Metadata record",
     grade: 12,
     subject: "Mathematics",
     topic: "Functions and graphs",
@@ -157,6 +158,7 @@ export const sampleQuestions: PastPaperQuestion[] = [
   },
   {
     id: "phys-2024-p1-mech",
+    questionNumber: "Metadata record",
     grade: 12,
     subject: "Physical Sciences",
     topic: "Newton's laws and momentum",
@@ -174,6 +176,7 @@ export const sampleQuestions: PastPaperQuestion[] = [
   },
   {
     id: "life-2023-p2-gen",
+    questionNumber: "Metadata record",
     grade: 12,
     subject: "Life Sciences",
     topic: "Genetics and inheritance",
