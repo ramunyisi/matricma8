@@ -5,16 +5,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { GraduationCap, UserPlus } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { friendlyError } from "@/lib/utils";
 
 export default function SignupPage() {
   const [message, setMessage] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const router = useRouter();
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     const form = new FormData(event.currentTarget);
+    const email = String(form.get("email"));
     try {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
@@ -22,23 +26,40 @@ export default function SignupPage() {
         return;
       }
       const { data, error } = await supabase.auth.signUp({
-        email: String(form.get("email")),
+        email,
         password: String(form.get("password")),
         options: { data: { role: form.get("role") } }
       });
       if (error) {
-        setMessage(error.message);
+        setMessage(friendlyError(error));
         return;
       }
       if (!data.session) {
+        setPendingEmail(email);
         setMessage("Account created. Check your email to confirm your account, then log in to complete onboarding.");
         return;
       }
       router.replace("/onboarding");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Supabase is not configured yet.");
+      setMessage(friendlyError(error, "Supabase is not configured yet."));
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    if (!pendingEmail) return;
+    setIsResending(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { error } = await supabase.auth.resend({ type: "signup", email: pendingEmail });
+      if (error) throw error;
+      setMessage("Confirmation email resent. Check your inbox and spam folder.");
+    } catch (error) {
+      setMessage(friendlyError(error, "Could not resend confirmation email."));
+    } finally {
+      setIsResending(false);
     }
   }
 
@@ -66,6 +87,11 @@ export default function SignupPage() {
           <UserPlus size={18} /> {isSubmitting ? "Creating account..." : "Sign up"}
         </button>
         {message ? <p className="mt-4 rounded-lg bg-chalk p-3 text-sm text-ink/75">{message}</p> : null}
+        {pendingEmail ? (
+          <button type="button" onClick={resendConfirmation} disabled={isResending} className="focus-ring mt-3 w-full rounded-lg border border-ink/15 px-4 py-3 text-sm font-black disabled:opacity-60">
+            {isResending ? "Resending..." : "Resend confirmation email"}
+          </button>
+        ) : null}
         <p className="mt-5 text-sm text-ink/70">
           Already have an account? <Link className="font-black text-veld" href="/auth/login">Login</Link>
         </p>

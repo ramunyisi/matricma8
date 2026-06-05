@@ -96,9 +96,12 @@ export type PastPaperQuestion = {
 };
 
 export type StudyTask = {
+  id?: string;
   day: string;
   subject: string;
   topic: string;
   taskType: "concept" | "practice" | "revision" | "assessment";
   durationMinutes: number;
+  dueDate?: string;
+  completed?: boolean;
 };

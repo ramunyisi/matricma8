@@ -10,17 +10,18 @@ import { matchBursaries } from "@/lib/bursaries";
 import { loadApsRules, loadBursaries, loadPastPaperQuestions } from "@/lib/content-data";
 import { sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
-import { generateLocalStudyPlan } from "@/lib/study-plan";
-import type { ApsRule, Bursary, PastPaperQuestion } from "@/lib/types";
+import { loadOrCreateStudyPlan, updateStudyTaskCompletion } from "@/lib/study-plan-data";
+import type { ApsRule, Bursary, PastPaperQuestion, StudyTask } from "@/lib/types";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
-import { formatDate } from "@/lib/utils";
+import { formatDate, friendlyError } from "@/lib/utils";
 
 export default function DashboardPage() {
   const { profile, isDemo, isLoading, error } = useLearnerProfile();
   const [apsRules, setApsRules] = useState<ApsRule[]>(sampleApsRules);
   const [bursaries, setBursaries] = useState<Bursary[]>(sampleBursaries);
   const [questions, setQuestions] = useState<PastPaperQuestion[]>(sampleQuestions);
-  const plan = generateLocalStudyPlan(profile);
+  const [plan, setPlan] = useState<StudyTask[]>([]);
+  const [planMessage, setPlanMessage] = useState("");
   const bursaryMatches = matchBursaries(profile, bursaries).slice(0, 3);
   const selectedRule = apsRules[0] ?? sampleApsRules[0];
   const aps = calculateAps(profile.subjects, selectedRule);
@@ -36,6 +37,28 @@ export default function DashboardPage() {
       setQuestions(loadedQuestions);
     });
   }, []);
+
+  useEffect(() => {
+    if (!profile.subjects.length) return;
+    const supabase = getSupabaseBrowserClient();
+    loadOrCreateStudyPlan(supabase, profile)
+      .then(setPlan)
+      .catch((planError) => setPlanMessage(friendlyError(planError, "Could not load study plan.")));
+  }, [profile]);
+
+  async function toggleTask(task: StudyTask) {
+    const nextCompleted = !task.completed;
+    setPlan((current) => current.map((item) => item === task ? { ...item, completed: nextCompleted } : item));
+    if (!task.id) return;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) return;
+      await updateStudyTaskCompletion(supabase, task.id, nextCompleted);
+    } catch (toggleError) {
+      setPlanMessage(friendlyError(toggleError, "Could not update task."));
+      setPlan((current) => current.map((item) => item.id === task.id ? { ...item, completed: !nextCompleted } : item));
+    }
+  }
 
   return (
     <AppShell>
@@ -53,16 +76,23 @@ export default function DashboardPage() {
             </div>
             <Badge tone="sample">AI-ready</Badge>
           </div>
+          {planMessage ? <p className="mt-3 rounded-lg bg-protea/10 p-3 text-sm font-bold text-ink">{planMessage}</p> : null}
           <div className="mt-4 grid gap-2 md:grid-cols-7">
             {plan.map((task) => (
-              <div key={task.day} className="rounded-lg border border-ink/10 bg-chalk p-3">
-                <p className="font-black">{task.day}</p>
+              <button key={`${task.day}-${task.subject}-${task.topic}`} onClick={() => toggleTask(task)} className={`rounded-lg border border-ink/10 p-3 text-left transition ${task.completed ? "bg-veld/10" : "bg-chalk"}`}>
+                <p className="flex items-center justify-between gap-2 font-black">
+                  {task.day}
+                  <span className={`h-4 w-4 rounded border ${task.completed ? "border-veld bg-veld" : "border-ink/25 bg-white"}`} />
+                </p>
                 <p className="mt-2 text-sm font-bold">{task.subject}</p>
                 <p className="mt-1 text-xs leading-5 text-ink/65">{task.topic}</p>
                 <p className="mt-2 text-xs font-bold text-veld">{task.durationMinutes} min</p>
-              </div>
+              </button>
             ))}
           </div>
+          <p className="mt-3 text-sm font-bold text-ink/65">
+            {plan.filter((task) => task.completed).length}/{plan.length} tasks complete
+          </p>
         </Card>
         <Card>
           <h2 className="text-xl font-black">APS estimate</h2>

@@ -10,11 +10,13 @@ const requestSchema = z.discriminatedUnion("type", [
     grade: z.number().int().min(10).max(12),
     topic: z.string().min(1),
     question: z.string().min(1),
-    grade10Mode: z.boolean().optional()
+    grade10Mode: z.boolean().optional(),
+    grounding: z.any().optional()
   }),
   z.object({
     type: z.literal("plan"),
-    profile: z.any().optional()
+    profile: z.any().optional(),
+    grounding: z.any().optional()
   })
 ]);
 
@@ -25,10 +27,10 @@ export async function POST(request: Request) {
     const profile = body.profile ?? demoProfile;
     const marks = Object.fromEntries(profile.subjects.map((subject: { name: string; currentMark: number }) => [subject.name, subject.currentMark]));
     const targetMarks = Object.fromEntries(profile.subjects.map((subject: { name: string; targetMark: number }) => [subject.name, subject.targetMark]));
-    const plan = await generateStudyPlan(profile, profile.subjects, marks, targetMarks);
+    const plan = await generateStudyPlan(profile, profile.subjects, marks, targetMarks, body.grounding);
     return NextResponse.json({ result: plan, verified: false });
   }
 
-  const result = await explainTopic(body.subject, body.grade, body.topic, body.question, body.grade10Mode);
+  const result = await explainTopic(body.subject, body.grade, body.topic, body.question, body.grade10Mode, body.grounding);
   return NextResponse.json({ result, verified: false });
 }

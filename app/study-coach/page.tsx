@@ -1,19 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bot, CalendarPlus, Send } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
-import { sampleQuestions } from "@/lib/sample-data";
+import { loadApsRules, loadBursaries, loadPastPaperQuestions } from "@/lib/content-data";
+import { sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { saveStudyPlan } from "@/lib/study-plan-data";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
+import type { ApsRule, Bursary, PastPaperQuestion, StudyTask } from "@/lib/types";
+import { friendlyError } from "@/lib/utils";
 
 export default function StudyCoachPage() {
   const { profile, isDemo } = useLearnerProfile();
+  const [apsRules, setApsRules] = useState<ApsRule[]>(sampleApsRules);
+  const [bursaries, setBursaries] = useState<Bursary[]>(sampleBursaries);
+  const [questions, setQuestions] = useState<PastPaperQuestion[]>(sampleQuestions);
   const [question, setQuestion] = useState("Please explain functions and graphs simply.");
   const [grade10Mode, setGrade10Mode] = useState(true);
   const [answer, setAnswer] = useState("Ask a CAPS topic question or generate a 7-day study plan.");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    Promise.all([loadApsRules(supabase), loadBursaries(supabase), loadPastPaperQuestions(supabase)]).then(([rules, loadedBursaries, loadedQuestions]) => {
+      setApsRules(rules);
+      setBursaries(loadedBursaries);
+      setQuestions(loadedQuestions);
+    });
+  }, []);
+
+  const grounding = {
+    apsRules: apsRules.map((rule) => ({ institutionName: rule.institutionName, programmeName: rule.programmeName, sourceUrl: rule.sourceUrl, lastVerifiedAt: rule.lastVerifiedAt })),
+    bursaries: bursaries.map((bursary) => ({ name: bursary.name, fieldOfStudy: bursary.fieldOfStudy, deadline: bursary.deadline, sourceUrl: bursary.sourceUrl, lastVerifiedAt: bursary.lastVerifiedAt })),
+    pastPaperQuestions: questions.map((item) => ({ subject: item.subject, topic: item.topic, year: item.year, sourceUrl: item.sourceUrl }))
+  };
 
   async function askCoach() {
     setLoading(true);
@@ -26,7 +49,8 @@ export default function StudyCoachPage() {
         grade: profile.grade,
         topic: "Functions and graphs",
         question,
-        grade10Mode
+        grade10Mode,
+        grounding
       })
     });
     const data = await response.json();
@@ -37,11 +61,15 @@ export default function StudyCoachPage() {
   async function plan() {
     setLoading(true);
     try {
-      const response = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "plan", profile }) });
+      const response = await fetch("/api/coach", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "plan", profile, grounding }) });
       const data = await response.json();
+      const tasks = normalisePlan(data.result, profile);
+      const supabase = getSupabaseBrowserClient();
+      if (supabase && !isDemo) await saveStudyPlan(supabase, profile, tasks);
       setAnswer(JSON.stringify(data.result, null, 2));
-    } catch {
-      setAnswer(JSON.stringify(generateLocalStudyPlan(profile), null, 2));
+    } catch (error) {
+      const fallback = generateLocalStudyPlan(profile);
+      setAnswer(`${friendlyError(error, "Generated a local fallback plan.")}\n\n${JSON.stringify(fallback, null, 2)}`);
     }
     setLoading(false);
   }
@@ -75,7 +103,7 @@ export default function StudyCoachPage() {
         <Card>
           <h2 className="text-xl font-black">Recommended context</h2>
           <div className="mt-4 space-y-3">
-            {sampleQuestions.map((question) => (
+            {questions.slice(0, 4).map((question) => (
               <div key={question.id} className="rounded-lg bg-chalk p-3">
                 <p className="font-bold">{question.subject}</p>
                 <p className="mt-1 text-sm text-ink/65">{question.topic}</p>
@@ -90,4 +118,12 @@ export default function StudyCoachPage() {
       </div>
     </AppShell>
   );
+}
+
+function normalisePlan(result: unknown, profile: ReturnType<typeof useLearnerProfile>["profile"]): StudyTask[] {
+  if (Array.isArray(result)) return result as StudyTask[];
+  if (result && typeof result === "object" && Array.isArray((result as { tasks?: unknown[] }).tasks)) {
+    return (result as { tasks: StudyTask[] }).tasks;
+  }
+  return generateLocalStudyPlan(profile);
 }

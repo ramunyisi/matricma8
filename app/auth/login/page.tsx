@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { GraduationCap, LogIn } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { friendlyError } from "@/lib/utils";
 
 export default function LoginPage() {
   const [message, setMessage] = useState("");
@@ -21,17 +22,18 @@ export default function LoginPage() {
         setMessage("Demo mode: Supabase is not configured yet. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local to enable login.");
         return;
       }
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: String(form.get("email")),
         password: String(form.get("password"))
       });
       if (error) {
-        setMessage(error.message);
+        setMessage(friendlyError(error));
         return;
       }
-      router.replace("/dashboard");
+      const { data: appUser } = await supabase.from("users").select("role").eq("id", data.user.id).single();
+      router.replace(appUser?.role === "teacher_admin" ? "/admin" : "/dashboard");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Supabase is not configured yet.");
+      setMessage(friendlyError(error, "Supabase is not configured yet."));
     } finally {
       setIsSubmitting(false);
     }

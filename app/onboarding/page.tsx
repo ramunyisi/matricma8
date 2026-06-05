@@ -8,6 +8,7 @@ import { provinces, sampleSubjects } from "@/lib/sample-data";
 import { saveLearnerProfile } from "@/lib/learner-profile";
 import type { InternetAccessLevel } from "@/lib/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { friendlyError } from "@/lib/utils";
 
 export default function OnboardingPage() {
   const [selected, setSelected] = useState(["Mathematics", "Physical Sciences", "English Home Language", "Life Sciences"]);
@@ -69,7 +70,7 @@ export default function OnboardingPage() {
       await saveLearnerProfile(supabase, data.user, payload);
       router.replace("/dashboard");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save profile.");
+      setMessage(friendlyError(error, "Could not save profile."));
     } finally {
       setIsSaving(false);
     }

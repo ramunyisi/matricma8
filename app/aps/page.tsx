@@ -10,6 +10,7 @@ import { demoProfile, sampleApsRules } from "@/lib/sample-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
 import type { ApsRule, LearnerSubject } from "@/lib/types";
+import { friendlyError } from "@/lib/utils";
 
 export default function ApsPage() {
   const { profile, isDemo } = useLearnerProfile();
@@ -52,7 +53,7 @@ export default function ApsPage() {
       await updateLearnerSubjectMarks(supabase, profile.id, subjects);
       setMessage("Marks saved to your learner profile and mark history.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save marks.");
+      setMessage(friendlyError(error, "Could not save marks."));
     } finally {
       setIsSaving(false);
     }

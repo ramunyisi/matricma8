@@ -1,0 +1,151 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { AppShell } from "@/components/app-shell";
+import { Card, PageHeader, ProgressBar } from "@/components/ui";
+import { getCurrentUser, saveLearnerProfile } from "@/lib/learner-profile";
+import { sampleSubjects, provinces } from "@/lib/sample-data";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
+import type { InternetAccessLevel } from "@/lib/types";
+import { useLearnerProfile } from "@/lib/use-learner-profile";
+import { friendlyError } from "@/lib/utils";
+
+export default function ProfilePage() {
+  const { profile, isDemo, isLoading } = useLearnerProfile();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [grade, setGrade] = useState<10 | 11 | 12>(12);
+  const [province, setProvince] = useState("Gauteng");
+  const [schoolName, setSchoolName] = useState("");
+  const [homeLanguage, setHomeLanguage] = useState("English");
+  const [internetAccessLevel, setInternetAccessLevel] = useState<InternetAccessLevel>("medium");
+  const [examDate, setExamDate] = useState("");
+  const [careerInterests, setCareerInterests] = useState("");
+  const [preferredStudyTimes, setPreferredStudyTimes] = useState("");
+  const [marks, setMarks] = useState<Record<string, { currentMark: number; targetMark: number }>>({});
+  const [message, setMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setSelected(profile.subjects.map((subject) => subject.name));
+    setGrade(profile.grade);
+    setProvince(profile.province);
+    setSchoolName(profile.schoolName ?? "");
+    setHomeLanguage(profile.homeLanguage);
+    setInternetAccessLevel(profile.internetAccessLevel);
+    setExamDate(profile.examDate);
+    setCareerInterests(profile.careerInterests.join(", "));
+    setPreferredStudyTimes(profile.preferredStudyTimes.join(", "));
+    setMarks(Object.fromEntries(profile.subjects.map((subject) => [subject.name, { currentMark: subject.currentMark, targetMark: subject.targetMark }])));
+  }, [profile]);
+
+  const subjectRows = useMemo(() => selected.map((name) => ({ name, currentMark: marks[name]?.currentMark ?? 50, targetMark: marks[name]?.targetMark ?? 65 })), [selected, marks]);
+
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSaving(true);
+    setMessage("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || isDemo) {
+        setMessage("Demo mode: profile changes are local only.");
+        return;
+      }
+      const user = await getCurrentUser(supabase);
+      if (!user) throw new Error("Login required.");
+      await saveLearnerProfile(supabase, user, {
+        grade,
+        province,
+        schoolName,
+        homeLanguage,
+        internetAccessLevel,
+        examDate,
+        careerInterests: splitList(careerInterests),
+        preferredStudyTimes: splitList(preferredStudyTimes),
+        subjects: subjectRows
+      });
+      setMessage("Profile updated.");
+    } catch (error) {
+      setMessage(friendlyError(error, "Could not save profile."));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <AppShell>
+      <PageHeader title="Profile" eyebrow="Account settings">
+        Update grade, province, subject marks, career interests, study times, and internet access.
+      </PageHeader>
+      {isLoading ? <Card className="mb-4">Loading profile...</Card> : null}
+      {message ? <Card className="mb-4">{message}</Card> : null}
+      <form onSubmit={saveProfile} className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <Card>
+          <h2 className="text-xl font-black">Learner details</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Grade"><select value={grade} onChange={(event) => setGrade(Number(event.target.value) as 10 | 11 | 12)} className="input"><option value={10}>10</option><option value={11}>11</option><option value={12}>12</option></select></Field>
+            <Field label="Province"><select value={province} onChange={(event) => setProvince(event.target.value)} className="input">{provinces.map((item) => <option key={item}>{item}</option>)}</select></Field>
+            <Field label="School name optional"><input value={schoolName} onChange={(event) => setSchoolName(event.target.value)} className="input" /></Field>
+            <Field label="Home language"><input value={homeLanguage} onChange={(event) => setHomeLanguage(event.target.value)} className="input" /></Field>
+            <Field label="Internet access"><select value={internetAccessLevel} onChange={(event) => setInternetAccessLevel(event.target.value as InternetAccessLevel)} className="input"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></Field>
+            <Field label="Exam or goal date"><input value={examDate} onChange={(event) => setExamDate(event.target.value)} className="input" type="date" /></Field>
+          </div>
+          <Field label="Career interests"><input value={careerInterests} onChange={(event) => setCareerInterests(event.target.value)} className="input" /></Field>
+          <Field label="Preferred study times"><input value={preferredStudyTimes} onChange={(event) => setPreferredStudyTimes(event.target.value)} className="input" /></Field>
+        </Card>
+        <Card>
+          <h2 className="text-xl font-black">Subjects and marks</h2>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {sampleSubjects.map((subject) => (
+              <label key={subject} className="flex items-center gap-2 rounded-lg border border-ink/10 p-3 text-sm font-semibold">
+                <input type="checkbox" checked={selected.includes(subject)} onChange={() => toggleSubject(subject, setSelected, setMarks)} />
+                {subject}
+              </label>
+            ))}
+          </div>
+          <div className="mt-5 space-y-4">
+            {subjectRows.map((subject) => (
+              <div key={subject.name}>
+                <div className="flex items-center justify-between">
+                  <p className="font-bold">{subject.name}</p>
+                  <p className="text-sm text-ink/60">{subject.currentMark}% now</p>
+                </div>
+                <ProgressBar value={subject.currentMark} target={subject.targetMark} />
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <Field label="Current mark"><input className="input" type="number" min="0" max="100" value={subject.currentMark} onChange={(event) => updateMark(subject.name, "currentMark", Number(event.target.value), setMarks)} /></Field>
+                  <Field label="Target mark"><input className="input" type="number" min="0" max="100" value={subject.targetMark} onChange={(event) => updateMark(subject.name, "targetMark", Number(event.target.value), setMarks)} /></Field>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button disabled={isSaving} className="focus-ring mt-5 w-full rounded-lg bg-veld px-4 py-3 font-black text-white disabled:opacity-60">
+            {isSaving ? "Saving..." : "Save profile"}
+          </button>
+        </Card>
+      </form>
+      <style jsx>{`.input{margin-top:.5rem;width:100%;border-radius:.5rem;border:1px solid rgb(23 33 43 / .15);padding:.75rem;background:white}`}</style>
+    </AppShell>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="block text-sm font-bold text-ink/80">{label}{children}</label>;
+}
+
+function splitList(value: string) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function toggleSubject(subject: string, setSelected: React.Dispatch<React.SetStateAction<string[]>>, setMarks: React.Dispatch<React.SetStateAction<Record<string, { currentMark: number; targetMark: number }>>>) {
+  setSelected((current) => current.includes(subject) ? current.filter((item) => item !== subject) : [...current, subject]);
+  setMarks((current) => ({ ...current, [subject]: current[subject] ?? { currentMark: 50, targetMark: 65 } }));
+}
+
+function updateMark(subjectName: string, field: "currentMark" | "targetMark", value: number, setMarks: React.Dispatch<React.SetStateAction<Record<string, { currentMark: number; targetMark: number }>>>) {
+  setMarks((current) => ({
+    ...current,
+    [subjectName]: {
+      ...current[subjectName],
+      [field]: Math.max(0, Math.min(100, value))
+    }
+  }));
+}

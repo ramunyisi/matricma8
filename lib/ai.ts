@@ -15,14 +15,20 @@ When official data is missing or unverified, say it needs verification from stor
 For learners under 18, encourage parent/guardian support for accounts, bursary applications, and sensitive decisions.
 `;
 
-export async function generateStudyPlan(profile: LearnerProfile, subjects: LearnerSubject[], marks: Record<string, number>, targetMarks: Record<string, number>) {
+export type AiGroundingContext = {
+  apsRules?: unknown[];
+  bursaries?: unknown[];
+  pastPaperQuestions?: unknown[];
+};
+
+export async function generateStudyPlan(profile: LearnerProfile, subjects: LearnerSubject[], marks: Record<string, number>, targetMarks: Record<string, number>, grounding?: AiGroundingContext) {
   const fallback = generateLocalStudyPlan({ ...profile, subjects });
-  return runAiJson("Generate a 7-day study plan.", { profile, subjects, marks, targetMarks, fallback }, fallback);
+  return runAiJson("Generate a 7-day study plan.", { profile, subjects, marks, targetMarks, grounding, fallback }, fallback);
 }
 
-export async function explainTopic(subject: string, grade: number, topic: string, learnerQuestion: string, grade10Mode = false) {
+export async function explainTopic(subject: string, grade: number, topic: string, learnerQuestion: string, grade10Mode = false, grounding?: AiGroundingContext) {
   const fallback = `${topic}: start with the key CAPS idea, work through one example, then practise a past-paper question. This explanation is not an official memo and should be checked against your teacher or DBE materials.`;
-  return runAiText("Explain a CAPS topic simply.", { subject, grade, topic, learnerQuestion, grade10Mode }, fallback);
+  return runAiText("Explain a CAPS topic simply.", { subject, grade, topic, learnerQuestion, grade10Mode, grounding }, fallback);
 }
 
 export function predictRisk(currentMarks: Record<string, number>, targetMarks: Record<string, number>) {
