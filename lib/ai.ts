@@ -15,6 +15,8 @@ When official data is missing or unverified, say it needs verification from stor
 For learners under 18, encourage parent/guardian support for accounts, bursary applications, and sensitive decisions.
 `;
 
+const openAiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
 export type AiGroundingContext = {
   apsRules?: unknown[];
   bursaries?: unknown[];
@@ -55,7 +57,14 @@ export async function generateRelatedPracticeQuestion(questionMetadata: PastPape
   ].join("\n");
 
   return runAiText(
-    "Generate one original CAPS-aligned practice question related to this past-paper metadata, then provide a step-by-step solution. Do not copy or claim to reproduce the official question. Keep it suitable for the grade and subject.",
+    [
+      "Generate one original CAPS-aligned practice question related to this past-paper metadata.",
+      "Then provide a clear step-by-step solution.",
+      "Do not copy or claim to reproduce the official question.",
+      "Do not invent official memo content.",
+      "Use simple South African school English.",
+      "Include a short note that the learner can download the linked paper for official practice."
+    ].join(" "),
     { questionMetadata },
     fallback
   );
@@ -69,7 +78,7 @@ async function runAiText(task: string, payload: unknown, fallback: string) {
   if (!process.env.OPENAI_API_KEY) return fallback;
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: openAiModel,
     temperature: 0.4,
     messages: [
       { role: "system", content: systemRules },
@@ -83,7 +92,7 @@ async function runAiJson<T>(task: string, payload: unknown, fallback: T): Promis
   if (!process.env.OPENAI_API_KEY) return fallback;
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: openAiModel,
     temperature: 0.35,
     response_format: { type: "json_object" },
     messages: [

@@ -46,6 +46,12 @@ export async function POST(request: Request) {
   }
 
   if (body.type === "relatedPracticeQuestion") {
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "OpenAI is not configured. Add OPENAI_API_KEY to .env.local and restart the dev server." },
+        { status: 503 }
+      );
+    }
     const result = await generateRelatedPracticeQuestion(body.questionMetadata);
     return NextResponse.json({ result, verified: false });
   }
