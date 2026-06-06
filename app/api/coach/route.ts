@@ -30,32 +30,53 @@ const requestSchema = z.discriminatedUnion("type", [
 ]);
 
 export async function POST(request: Request) {
-  const body = requestSchema.parse(await request.json());
+  try {
+    const body = requestSchema.parse(await request.json());
 
-  if (body.type === "plan") {
-    const profile = body.profile ?? demoProfile;
-    const marks = Object.fromEntries(profile.subjects.map((subject: { name: string; currentMark: number }) => [subject.name, subject.currentMark]));
-    const targetMarks = Object.fromEntries(profile.subjects.map((subject: { name: string; targetMark: number }) => [subject.name, subject.targetMark]));
-    const plan = await generateStudyPlan(profile, profile.subjects, marks, targetMarks, body.grounding);
-    return NextResponse.json({ result: plan, verified: false });
-  }
-
-  if (body.type === "practiceExplanation") {
-    const result = await generatePracticeExplanation(body.questionMetadata, body.memoContext);
-    return NextResponse.json({ result, verified: false });
-  }
-
-  if (body.type === "relatedPracticeQuestion") {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "OpenAI is not configured. Add OPENAI_API_KEY to .env.local and restart the dev server." },
-        { status: 503 }
-      );
+    if (body.type === "plan") {
+      const profile = body.profile ?? demoProfile;
+      const marks = Object.fromEntries(profile.subjects.map((subject: { name: string; currentMark: number }) => [subject.name, subject.currentMark]));
+      const targetMarks = Object.fromEntries(profile.subjects.map((subject: { name: string; targetMark: number }) => [subject.name, subject.targetMark]));
+      const plan = await generateStudyPlan(profile, profile.subjects, marks, targetMarks, body.grounding);
+      return NextResponse.json({ result: plan, verified: false });
     }
-    const result = await generateRelatedPracticeQuestion(body.questionMetadata);
-    return NextResponse.json({ result, verified: false });
-  }
 
-  const result = await explainTopic(body.subject, body.grade, body.topic, body.question, body.grade10Mode, body.grounding);
-  return NextResponse.json({ result, verified: false });
+    if (body.type === "practiceExplanation") {
+      const result = await generatePracticeExplanation(body.questionMetadata, body.memoContext);
+      return NextResponse.json({ result, verified: false });
+    }
+
+    if (body.type === "relatedPracticeQuestion") {
+      if (!process.env.OPENAI_API_KEY) {
+        return NextResponse.json(
+          { error: "OpenAI is not configured. Add OPENAI_API_KEY to .env.local and restart the dev server." },
+          { status: 503 }
+        );
+      }
+      const result = await generateRelatedPracticeQuestion(body.questionMetadata);
+      return NextResponse.json({ result, verified: false });
+    }
+
+    const result = await explainTopic(body.subject, body.grade, body.topic, body.question, body.grade10Mode, body.grounding);
+    return NextResponse.json({ result, verified: false });
+  } catch (error) {
+    return NextResponse.json({ error: coachErrorMessage(error) }, { status: coachErrorStatus(error) });
+  }
+}
+
+function coachErrorMessage(error: unknown) {
+  const typed = error as { status?: number; code?: string; message?: string };
+  if (typed.status === 401 || typed.code === "invalid_api_key") {
+    return "OpenAI rejected the API key. Create a new key in OpenAI, update OPENAI_API_KEY in .env.local, and restart the dev server.";
+  }
+  if (typed.status === 429) return "OpenAI rate limit or quota reached. Check your OpenAI billing and usage limits.";
+  if (typed.message) return typed.message;
+  return "Could not generate an AI response.";
+}
+
+function coachErrorStatus(error: unknown) {
+  const typed = error as { status?: number; code?: string };
+  if (typed.status === 401 || typed.code === "invalid_api_key") return 401;
+  if (typed.status === 429) return 429;
+  return 500;
 }

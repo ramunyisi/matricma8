@@ -42,9 +42,9 @@ export default function PastPapersPage() {
           questionMetadata: question
         })
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? "Could not generate practice question.");
-      setPracticeQuestions((current) => ({ ...current, [question.id]: data.result }));
+      setPracticeQuestions((current) => ({ ...current, [question.id]: data.result ?? "No practice question was returned." }));
     } catch (error) {
       setPracticeQuestions((current) => ({ ...current, [question.id]: friendlyError(error, "Could not generate a practice question.") }));
     } finally {
@@ -139,4 +139,14 @@ function paperHref(url: string) {
     return `/api/papers/download?file=${encodeURIComponent(decodeURIComponent(url.slice(prefix.length)))}`;
   }
   return url;
+}
+
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as { result?: string; error?: string };
+  } catch {
+    return { error: text.slice(0, 240) };
+  }
 }
