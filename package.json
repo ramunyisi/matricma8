@@ -8,7 +8,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "import:papers": "tsx scripts/import-papers.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

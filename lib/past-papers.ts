@@ -24,6 +24,7 @@ export function filterPastPaperQuestions(questions: PastPaperQuestion[], filters
         question.topic,
         question.paperNumber,
         question.questionNumber,
+        question.questionText,
         question.examSession,
         question.year,
         question.difficulty,

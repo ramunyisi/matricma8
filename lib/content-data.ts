@@ -43,6 +43,7 @@ export async function loadBursaries(supabase: SupabaseClient | null): Promise<Bu
 type PaperQuestionRow = {
   id: string;
   question_number: string;
+  question_text_optional: string | null;
   difficulty: "easy" | "medium" | "hard";
   marks: number | null;
   page_number: number | null;
@@ -78,6 +79,7 @@ export async function loadPastPaperQuestions(supabase: SupabaseClient | null): P
     .select(`
       id,
       question_number,
+      question_text_optional,
       difficulty,
       marks,
       page_number,
@@ -109,6 +111,7 @@ export async function loadPastPaperQuestions(supabase: SupabaseClient | null): P
       return {
         id: row.id,
         questionNumber: row.question_number,
+        questionText: row.question_text_optional ?? undefined,
         grade: paper.grade,
         subject: subject.name,
         topic: topic?.name ?? "General revision",

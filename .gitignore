@@ -22,6 +22,9 @@ pnpm-debug.log*
 # testing
 coverage/
 
+# generated importer output
+tmp/
+
 # system
 .DS_Store
 

@@ -106,6 +106,15 @@ create table public.paper_questions (
   memo_page_number int
 );
 
+create table public.paper_pages (
+  id uuid primary key default gen_random_uuid(),
+  past_paper_id uuid not null references public.past_papers(id) on delete cascade,
+  page_number int not null,
+  ocr_text text not null default '',
+  created_at timestamptz not null default now(),
+  unique (past_paper_id, page_number)
+);
+
 create table public.aps_rules (
   id uuid primary key default gen_random_uuid(),
   institution_name text not null,
@@ -174,6 +183,7 @@ alter table public.subjects enable row level security;
 alter table public.topics enable row level security;
 alter table public.past_papers enable row level security;
 alter table public.paper_questions enable row level security;
+alter table public.paper_pages enable row level security;
 alter table public.aps_rules enable row level security;
 alter table public.aps_predictions enable row level security;
 alter table public.bursaries enable row level security;
@@ -190,6 +200,7 @@ create policy "public read subjects" on public.subjects for select to authentica
 create policy "public read topics" on public.topics for select to authenticated using (true);
 create policy "public read past papers" on public.past_papers for select to authenticated using (true);
 create policy "public read questions" on public.paper_questions for select to authenticated using (true);
+create policy "public read paper pages" on public.paper_pages for select to authenticated using (true);
 create policy "public read aps rules" on public.aps_rules for select to authenticated using (true);
 create policy "public read bursaries" on public.bursaries for select to authenticated using (true);
 

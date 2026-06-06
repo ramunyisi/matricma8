@@ -105,9 +105,11 @@ export default function PastPapersPage() {
               <Info label="Pages" value={`Q ${question.pageNumber}, memo ${question.memoPageNumber}`} />
             </dl>
             <div className="mt-4 rounded-lg bg-chalk p-3 text-sm leading-6 text-ink/70">
-              {mode === "practice"
-                ? "AI explanation placeholder: read the official question from the linked DBE paper, attempt it, then request a step-by-step explanation."
-                : "Marking mode placeholder: compare your answer to the official memo link and capture which CAPS skill caused errors."}
+              {question.questionText
+                ? `${question.questionText.slice(0, 420)}${question.questionText.length > 420 ? "..." : ""}`
+                : mode === "practice"
+                  ? "Read the official question from the linked DBE paper, attempt it, then request a step-by-step explanation."
+                  : "Compare your answer to the official memo link and capture which CAPS skill caused errors."}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <a className="focus-ring inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-black text-white" href={question.paperUrl} target="_blank">Paper source <ExternalLink size={14} /></a>
