@@ -20,7 +20,7 @@ export default function PastPapersPage() {
   const [topic, setTopic] = useState("All");
   const [difficulty, setDifficulty] = useState("All");
   const [mode, setMode] = useState<"practice" | "marking">("practice");
-  const [explanations, setExplanations] = useState<Record<string, string>>({});
+  const [practiceQuestions, setPracticeQuestions] = useState<Record<string, string>>({});
   const [loadingExplanationId, setLoadingExplanationId] = useState<string | null>(null);
   const topics = Array.from(new Set(allQuestions.map((question) => question.topic)));
   const subjects = Array.from(new Set([...sampleSubjects, ...allQuestions.map((question) => question.subject)]));
@@ -31,23 +31,22 @@ export default function PastPapersPage() {
     loadPastPaperQuestions(getSupabaseBrowserClient()).then(setAllQuestions);
   }, []);
 
-  async function explainSolution(question: PastPaperQuestion) {
+  async function generatePractice(question: PastPaperQuestion) {
     setLoadingExplanationId(question.id);
     try {
       const response = await fetch("/api/coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "practiceExplanation",
-          questionMetadata: question,
-          memoContext: `Official memo URL: ${question.memoUrl}. Memo page: ${question.memoPageNumber}. Do not invent the official answer if memo content is unavailable.`
+          type: "relatedPracticeQuestion",
+          questionMetadata: question
         })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Could not generate explanation.");
-      setExplanations((current) => ({ ...current, [question.id]: data.result }));
+      if (!response.ok) throw new Error(data.error ?? "Could not generate practice question.");
+      setPracticeQuestions((current) => ({ ...current, [question.id]: data.result }));
     } catch (error) {
-      setExplanations((current) => ({ ...current, [question.id]: friendlyError(error, "Could not explain this solution.") }));
+      setPracticeQuestions((current) => ({ ...current, [question.id]: friendlyError(error, "Could not generate a practice question.") }));
     } finally {
       setLoadingExplanationId(null);
     }
@@ -56,7 +55,7 @@ export default function PastPapersPage() {
   return (
     <AppShell>
       <PageHeader title="Past-Paper Navigator" eyebrow="DBE-linked metadata">
-        The MVP stores paper metadata, page numbers, topics, memo links, and source URLs first. It does not copy copyrighted paper content.
+        Search past papers by topic, source, year, paper, or question number. Practice cards generate original AI questions related to the matched paper record, with a link to download the exact paper.
       </PageHeader>
       <Card className="mb-4">
         <label className="block text-sm font-bold">Search paper sources, question number, or chapter title
@@ -105,23 +104,21 @@ export default function PastPapersPage() {
               <Info label="Pages" value={`Q ${question.pageNumber}, memo ${question.memoPageNumber}`} />
             </dl>
             <div className="mt-4 rounded-lg bg-chalk p-3 text-sm leading-6 text-ink/70">
-              {question.questionText
-                ? `${question.questionText.slice(0, 420)}${question.questionText.length > 420 ? "..." : ""}`
-                : mode === "practice"
-                  ? "Read the official question from the linked DBE paper, attempt it, then request a step-by-step explanation."
-                  : "Compare your answer to the official memo link and capture which CAPS skill caused errors."}
+              {mode === "practice"
+                ? "Generate an original practice question related to this paper, topic, and question record. The generated question is not copied from the official paper."
+                : "Download the paper and memo, then use the generated practice solution to compare method and concepts."}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <a className="focus-ring inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-black text-white" href={question.paperUrl} target="_blank">Paper source <ExternalLink size={14} /></a>
+              <a className="focus-ring inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-black text-white" href={paperHref(question.paperUrl)} target="_blank">Download paper <ExternalLink size={14} /></a>
               <a className="focus-ring inline-flex items-center gap-2 rounded-lg border border-ink/15 px-3 py-2 text-sm font-black" href={question.memoUrl} target="_blank">Memo link <ExternalLink size={14} /></a>
-              <button onClick={() => explainSolution(question)} disabled={loadingExplanationId === question.id} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-veld/30 bg-veld/10 px-3 py-2 text-sm font-black text-veld disabled:opacity-60">
+              <button onClick={() => generatePractice(question)} disabled={loadingExplanationId === question.id} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-veld/30 bg-veld/10 px-3 py-2 text-sm font-black text-veld disabled:opacity-60">
                 <Sparkles size={14} />
-                {loadingExplanationId === question.id ? "Explaining..." : "AI explain solution"}
+                {loadingExplanationId === question.id ? "Generating..." : "Generate practice + solution"}
               </button>
             </div>
-            {explanations[question.id] ? (
+            {practiceQuestions[question.id] ? (
               <div className="mt-4 whitespace-pre-wrap rounded-lg border border-veld/20 bg-white p-3 text-sm leading-6 text-ink/75">
-                {explanations[question.id]}
+                {practiceQuestions[question.id]}
               </div>
             ) : null}
           </Card>
@@ -134,4 +131,12 @@ export default function PastPapersPage() {
 
 function Info({ label, value }: { label: string; value: string }) {
   return <div><dt className="font-bold text-ink/55">{label}</dt><dd className="mt-1 font-semibold">{value}</dd></div>;
+}
+
+function paperHref(url: string) {
+  const prefix = "local://past_papers/";
+  if (url.startsWith(prefix)) {
+    return `/api/papers/download?file=${encodeURIComponent(decodeURIComponent(url.slice(prefix.length)))}`;
+  }
+  return url;
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { explainTopic, generatePracticeExplanation, generateStudyPlan } from "@/lib/ai";
+import { explainTopic, generatePracticeExplanation, generateRelatedPracticeQuestion, generateStudyPlan } from "@/lib/ai";
 import { demoProfile } from "@/lib/sample-data";
 
 const requestSchema = z.discriminatedUnion("type", [
@@ -22,6 +22,10 @@ const requestSchema = z.discriminatedUnion("type", [
     type: z.literal("practiceExplanation"),
     questionMetadata: z.any(),
     memoContext: z.string().optional()
+  }),
+  z.object({
+    type: z.literal("relatedPracticeQuestion"),
+    questionMetadata: z.any()
   })
 ]);
 
@@ -38,6 +42,11 @@ export async function POST(request: Request) {
 
   if (body.type === "practiceExplanation") {
     const result = await generatePracticeExplanation(body.questionMetadata, body.memoContext);
+    return NextResponse.json({ result, verified: false });
+  }
+
+  if (body.type === "relatedPracticeQuestion") {
+    const result = await generateRelatedPracticeQuestion(body.questionMetadata);
     return NextResponse.json({ result, verified: false });
   }
 

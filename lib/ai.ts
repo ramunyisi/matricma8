@@ -40,6 +40,27 @@ export async function generatePracticeExplanation(questionMetadata: PastPaperQue
   return runAiText("Generate a practice explanation from metadata and optional memo context.", { questionMetadata, memoContext }, fallback);
 }
 
+export async function generateRelatedPracticeQuestion(questionMetadata: PastPaperQuestion) {
+  const fallback = [
+    `Original practice question related to ${questionMetadata.topic}:`,
+    `A Grade ${questionMetadata.grade} learner is revising ${questionMetadata.subject} ${questionMetadata.paperNumber}. Create a short problem on ${questionMetadata.topic}, then solve it step by step.`,
+    "",
+    "Solution approach:",
+    "1. Identify the key concept or formula.",
+    "2. Substitute the given values carefully.",
+    "3. Simplify one line at a time.",
+    "4. Check the answer against the conditions in the question.",
+    "",
+    "This is AI-generated practice, not the official paper question or memo."
+  ].join("\n");
+
+  return runAiText(
+    "Generate one original CAPS-aligned practice question related to this past-paper metadata, then provide a step-by-step solution. Do not copy or claim to reproduce the official question. Keep it suitable for the grade and subject.",
+    { questionMetadata },
+    fallback
+  );
+}
+
 export function recommendBursaries(profile: LearnerProfile, bursaries: Bursary[]) {
   return matchBursaries(profile, bursaries);
 }
