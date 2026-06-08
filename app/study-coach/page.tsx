@@ -75,8 +75,8 @@ export default function StudyCoachPage() {
   }
 
   return (
-    <AppShell>
-      <PageHeader title="AI Study Coach" eyebrow="Server-side OpenAI ready">
+      <AppShell>
+      <PageHeader title="AI Study Coach" eyebrow="Server-side Gemini ready">
         The coach uses simple English and must say when official facts, bursary deadlines, DBE paper content, or university requirements need verification.
       </PageHeader>
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -112,7 +112,7 @@ export default function StudyCoachPage() {
             ))}
           </div>
           <div className="mt-5 rounded-lg border border-protea/20 bg-protea/10 p-3 text-sm leading-6 text-ink/75">
-            Safety rule: MatricMate SA must not invent official admission, bursary, or DBE facts. It should use stored source URLs and verification dates.
+            Safety rule: MatricSA must not invent official admission, bursary, or DBE facts. It should use stored source URLs and verification dates.
           </div>
         </Card>
       </div>

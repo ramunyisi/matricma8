@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import { sampleApsRules, sampleBursaries, sampleSubjects } from "@/lib/sample-data";
+import { sampleApsRules, sampleSubjects } from "@/lib/sample-data";
+import { verifiedBursaries } from "@/lib/bursary-directory";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config();
@@ -41,7 +42,7 @@ async function main() {
   await assertOk(
     "bursaries",
     supabase.from("bursaries").upsert(
-      sampleBursaries.map((bursary) => ({
+      verifiedBursaries.map((bursary) => ({
         name: bursary.name,
         provider: bursary.provider,
         field_of_study: bursary.fieldOfStudy,
@@ -49,7 +50,7 @@ async function main() {
         min_subject_requirements_json: bursary.minSubjectRequirementsJson,
         province_requirements: bursary.provinceRequirements,
         citizenship_requirements: bursary.citizenshipRequirements,
-        deadline: bursary.deadline,
+        deadline: bursary.deadline || null,
         application_url: bursary.applicationUrl,
         required_documents_json: bursary.requiredDocumentsJson,
         source_url: bursary.sourceUrl,
@@ -58,7 +59,7 @@ async function main() {
     )
   );
 
-  console.log("Seeded MatricMate SA sample subjects, APS rules, and bursaries.");
+  console.log("Seeded MatricSA sample subjects, APS rules, and verified bursaries.");
 }
 
 async function assertOk(label: string, promise: PromiseLike<{ error: unknown }>) {

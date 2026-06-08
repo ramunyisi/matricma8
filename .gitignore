@@ -24,6 +24,8 @@ coverage/
 
 # generated importer output
 tmp/
+past_papers/
+suggestions.txt
 
 # system
 .DS_Store

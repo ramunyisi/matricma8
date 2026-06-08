@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BookOpen, Bot, Calculator, Search } from "lucide-react";
 import { Card } from "@/components/ui";
+import matricLogo from "../matriclogo.png";
 
 const features = [
   { title: "AI study coaching", text: "Simple explanations, 7-day planning, and mark-aware adjustments.", icon: Bot },
@@ -23,7 +24,10 @@ export default function LandingPage() {
         />
         <div className="absolute inset-0 bg-ink/55" />
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 text-white">
-          <Link href="/" className="text-lg font-black tracking-normal">MatricMate SA</Link>
+          <Link href="/" className="flex items-center gap-2 text-lg font-black tracking-normal">
+            <Image src={matricLogo} alt="MatricSA logo" width={34} height={34} className="h-8 w-8 rounded-lg object-contain" />
+            <span>MatricSA</span>
+          </Link>
           <div className="flex items-center gap-2">
             <Link className="focus-ring rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" href="/auth/login">Login</Link>
             <Link className="focus-ring rounded-lg bg-white px-3 py-2 text-sm font-black text-ink" href="/auth/signup">Get Started</Link>
@@ -32,7 +36,7 @@ export default function LandingPage() {
         <div className="relative z-10 mx-auto flex min-h-[78vh] max-w-7xl items-center px-4 pb-20 pt-8">
           <div className="max-w-3xl text-white">
             <p className="mb-3 text-sm font-black uppercase tracking-wide text-gold">For South African CAPS learners</p>
-            <h1 className="text-4xl font-black tracking-normal md:text-6xl">MatricMate SA</h1>
+            <h1 className="text-4xl font-black tracking-normal md:text-6xl">MatricSA</h1>
             <p className="mt-5 max-w-2xl text-lg font-medium leading-8 text-white/90 md:text-2xl">
               Your AI study coach, APS predictor, past-paper navigator, and bursary matcher for South African Grade 10-12 learners.
             </p>

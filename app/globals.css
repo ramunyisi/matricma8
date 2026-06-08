@@ -28,3 +28,9 @@ textarea {
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-veld focus:ring-offset-2;
 }
+
+@layer components {
+  .input {
+    @apply mt-2 w-full rounded-lg border border-ink/15 bg-white p-3 text-ink shadow-sm outline-none transition focus:border-veld focus:ring-2 focus:ring-veld/25;
+  }
+}

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ApsRule, Bursary, PastPaperQuestion } from "@/lib/types";
-import { sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
+import type { ApsRule, Bursary, PastPaper, PastPaperQuestion } from "@/lib/types";
+import { sampleApsRules, sampleQuestions } from "@/lib/sample-data";
+import { verifiedBursaries } from "@/lib/bursary-directory";
 
 export async function loadApsRules(supabase: SupabaseClient | null): Promise<ApsRule[]> {
   if (!supabase) return sampleApsRules;
@@ -19,25 +20,36 @@ export async function loadApsRules(supabase: SupabaseClient | null): Promise<Aps
 }
 
 export async function loadBursaries(supabase: SupabaseClient | null): Promise<Bursary[]> {
-  if (!supabase) return sampleBursaries;
+  if (!supabase) return verifiedBursaries;
   const { data, error } = await supabase.from("bursaries").select("*").order("deadline", { ascending: true });
-  if (error || !data || data.length === 0) return sampleBursaries;
-  return data.map((row) => ({
+  if (error || !data || data.length === 0) return verifiedBursaries;
+  const mapped = data.map((row) => ({
     id: row.id,
     name: row.name,
     provider: row.provider,
     fieldOfStudy: row.field_of_study,
+    fundingType: row.funding_type ?? undefined,
+    studyLevels: row.study_levels ?? [],
+    eligibilityCriteriaJson: row.eligibility_criteria_json ?? [],
     minAverage: Number(row.min_average ?? 0),
     minSubjectRequirementsJson: row.min_subject_requirements_json ?? [],
     provinceRequirements: row.province_requirements ?? [],
     citizenshipRequirements: row.citizenship_requirements ?? "",
     deadline: row.deadline ?? "",
+    officialStatus: row.official_status ?? undefined,
     applicationUrl: row.application_url,
     requiredDocumentsJson: row.required_documents_json ?? [],
     sourceUrl: row.source_url,
     lastVerifiedAt: row.last_verified_at ?? "",
-    sampleData: row.provider?.includes("Demo") ?? false
+    lastCheckedAt: row.last_checked_at ?? undefined,
+    sampleData: row.provider?.includes("Demo") ?? false,
+    applicationWindow: row.application_window ?? undefined,
+    summary: row.summary ?? undefined,
+    notes: row.notes ?? undefined
   }));
+
+  const nonDemo = mapped.filter((bursary) => !bursary.sampleData && !bursary.provider.toLowerCase().includes("demo"));
+  return nonDemo.length > 0 ? nonDemo : verifiedBursaries;
 }
 
 type PaperQuestionRow = {
@@ -71,6 +83,71 @@ type PaperQuestionRow = {
     subjects: { name: string } | { name: string }[] | null;
   }> | null;
 };
+
+type PastPaperRow = {
+  id: string;
+  grade: 10 | 11 | 12;
+  year: number;
+  exam_session: string;
+  paper_number: string;
+  paper_url: string;
+  memo_url: string | null;
+  language: string | null;
+  collection_title: string | null;
+  source_name: string;
+  source_url: string;
+  subjects: { name: string } | { name: string }[] | null;
+};
+
+export async function loadPastPapers(supabase: SupabaseClient | null): Promise<PastPaper[]> {
+  if (!supabase) return samplePastPapers();
+  const { data, error } = await supabase
+    .from("past_papers")
+    .select(`
+      id,
+      grade,
+      year,
+      exam_session,
+      paper_number,
+      paper_url,
+      memo_url,
+      language,
+      collection_title,
+      source_name,
+      source_url,
+      subjects ( name )
+    `)
+    .order("year", { ascending: false })
+    .order("paper_number", { ascending: true });
+
+  if (error || !data || data.length === 0) return samplePastPapers();
+
+  const mapped = (data as unknown as PastPaperRow[])
+    .map((row): PastPaper | null => {
+      const subject = Array.isArray(row.subjects) ? row.subjects[0] : row.subjects;
+      if (!subject) return null;
+
+      return {
+        id: row.id,
+        grade: row.grade,
+        subject: subject.name,
+        year: row.year,
+        examSession: row.exam_session,
+        paperNumber: row.paper_number,
+        paperUrl: row.paper_url,
+        memoUrl: row.memo_url ?? undefined,
+        paperFilename: filenameFromUrl(row.paper_url, `${subject.name} ${row.year} ${row.paper_number}.pdf`),
+        memoFilename: row.memo_url ? filenameFromUrl(row.memo_url, `${subject.name} ${row.year} ${row.paper_number} memo.pdf`) : undefined,
+        language: row.language ?? undefined,
+        collectionTitle: row.collection_title ?? undefined,
+        sourceName: row.source_name,
+        sourceUrl: row.source_url
+      } satisfies PastPaper;
+    })
+    .filter((paper): paper is PastPaper => Boolean(paper));
+
+  return mapped.length > 0 ? mapped : samplePastPapers();
+}
 
 export async function loadPastPaperQuestions(supabase: SupabaseClient | null): Promise<PastPaperQuestion[]> {
   if (!supabase) return sampleQuestions;
@@ -131,4 +208,54 @@ export async function loadPastPaperQuestions(supabase: SupabaseClient | null): P
     .filter((question): question is PastPaperQuestion => Boolean(question));
 
   return mapped;
+}
+
+function samplePastPapers(): PastPaper[] {
+  const papers = new Map<string, PastPaper>();
+
+  for (const question of sampleQuestions) {
+    const key = [question.grade, question.subject, question.year, question.examSession, question.paperNumber, question.paperUrl, question.memoUrl].join("|");
+    if (!papers.has(key)) {
+      papers.set(key, {
+        id: `sample-${papers.size + 1}`,
+        grade: question.grade,
+        subject: question.subject,
+        year: question.year,
+        examSession: question.examSession,
+        paperNumber: question.paperNumber,
+        paperUrl: question.paperUrl,
+        memoUrl: question.memoUrl,
+        paperFilename: filenameFromUrl(question.paperUrl, `${question.subject} ${question.year} ${question.paperNumber}.pdf`),
+        memoFilename: filenameFromUrl(question.memoUrl, `${question.subject} ${question.year} ${question.paperNumber} memo.pdf`),
+        language: undefined,
+        collectionTitle: `${question.year} ${question.examSession}`,
+        sourceName: question.sourceName,
+        sourceUrl: question.sourceUrl,
+        sampleData: true
+      });
+    }
+  }
+
+  return Array.from(papers.values());
+}
+
+function filenameFromUrl(value: string, fallback: string) {
+  const localPrefix = "local://past_papers/";
+  const storagePrefix = "storage://past-papers/";
+
+  if (value.startsWith(localPrefix)) {
+    return decodeURIComponent(value.slice(localPrefix.length));
+  }
+
+  if (value.startsWith(storagePrefix)) {
+    return decodeURIComponent(value.slice(storagePrefix.length).split("/").pop() ?? fallback);
+  }
+
+  try {
+    const url = new URL(value);
+    const file = decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() ?? "");
+    return !file || /^linkclick\.aspx$/i.test(file) ? fallback : file;
+  } catch {
+    return fallback;
+  }
 }

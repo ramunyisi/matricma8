@@ -1,15 +1,15 @@
-# MatricMate SA
+# MatricSA
 
 An AI Powered Learner Tutor.
 
-MatricMate SA is a mobile-first MVP for South African Grade 10-12 CAPS learners. It combines AI study coaching, configurable APS prediction, DBE-linked past-paper navigation, and bursary matching.
+MatricSA is a mobile-first MVP for South African Grade 10-12 CAPS learners. It combines AI study coaching, configurable APS prediction, DBE-linked past-paper navigation, and bursary matching.
 
 ## Stack
 
 - Next.js + TypeScript
 - Tailwind CSS
 - Supabase Auth and PostgreSQL
-- OpenAI API for tutoring and planning
+- Gemini API for tutoring and planning
 - Vitest for core logic tests
 
 ## Setup
@@ -26,7 +26,7 @@ npm install
 cp .env.example .env.local
 ```
 
-3. Add Supabase and OpenAI keys in `.env.local`.
+3. Add Supabase and Gemini keys in `.env.local`.
 
 4. Create the database schema.
 
@@ -50,7 +50,15 @@ The first seed will fail with `Could not find the table 'public.subjects'` until
 npm run seed
 ```
 
-6. Start the app:
+6. Optional: sync official DBE paper links into the searchable past-paper library after the schema is applied:
+
+```bash
+npm run import:dbe-papers -- --max=3
+```
+
+Omit `-- --max=3` to sync every DBE year/session collection discovered from the NSC directory.
+
+7. Start the app:
 
 ```bash
 npm run dev
@@ -97,6 +105,7 @@ Coverage currently targets APS calculation, bursary matching, and study-plan gen
 - Add parent/guardian consent and data minimisation review for under-18 learners.
 - Add teacher classroom grouping and learner progress exports.
 - Add robust ingestion pipeline for DBE paper metadata without aggressive scraping.
+- Add scheduled DBE directory refresh and broken-link checks.
 - Add document upload controls only where legally and privacy-wise necessary.
 - Add rate limits, prompt logging controls, and AI output review for tutoring safety.
 - Add programme-specific APS rule editor with validation.

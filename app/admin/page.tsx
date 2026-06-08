@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookPlus, Database, GraduationCap, ListPlus } from "lucide-react";
+import { BookPlus, Database, GraduationCap, ListPlus, RefreshCw, Upload } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -66,6 +66,66 @@ export default function AdminPage() {
     }
   }
 
+  async function submitPaperUpload(form: FormData) {
+    setIsSaving(true);
+    setMessage("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Login required.");
+
+      const response = await fetch("/api/admin/papers", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: form
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Paper upload failed.");
+      setMessage("Past paper and solution memo uploaded successfully.");
+      await refreshOptions();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not upload paper.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function submitDbeSync(form: FormData) {
+    setIsSaving(true);
+    setMessage("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Login required.");
+
+      const maxCollections = numberValue(form, "maxCollections");
+      const grades = listValue(form, "grades").map((grade) => Number(grade)).filter((grade) => [10, 11, 12].includes(grade));
+      const response = await fetch("/api/admin/dbe-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ maxCollections, grades: grades.length > 0 ? grades : undefined })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "DBE sync failed.");
+      const summary = result.data;
+      setMessage(`DBE sync complete: ${summary.papersUpserted} papers from ${summary.collectionsSynced} collection(s).`);
+      await refreshOptions();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not sync DBE papers.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <AppShell>
       <PageHeader title="Teacher/Admin Portal" eyebrow="Verified content operations">
@@ -73,7 +133,15 @@ export default function AdminPage() {
       </PageHeader>
       {message ? <div className="mb-4 rounded-lg bg-white p-3 text-sm font-bold text-ink shadow-sm">{message}</div> : null}
       <div className="grid gap-4 lg:grid-cols-2">
-        <AdminForm title="Add subject" icon={<GraduationCap />} badge="subjects" onSubmit={(form) => submit({
+        <AdminForm title="Sync DBE paper directory" icon={<RefreshCw />} badge="DBE links" disabled={isSaving} onSubmit={submitDbeSync}>
+          <Input name="maxCollections" label="Collections to sync" type="number" defaultValue="3" />
+          <Input name="grades" label="Grades" defaultValue="12" />
+          <div className="rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/65 sm:col-span-2">
+            Pulls DBE year/session pages into our searchable paper library while keeping downloads linked to DBE. Use comma-separated grades, for example 10,11.
+          </div>
+        </AdminForm>
+
+        <AdminForm title="Add subject" icon={<GraduationCap />} badge="subjects" disabled={isSaving} onSubmit={(form) => submit({
           type: "subject",
           name: value(form, "name"),
           grade: numberValue(form, "grade"),
@@ -84,7 +152,7 @@ export default function AdminPage() {
           <Input name="curriculum" label="Curriculum" defaultValue="CAPS" />
         </AdminForm>
 
-        <AdminForm title="Add topic" icon={<ListPlus />} badge="topics" onSubmit={(form) => submit({
+        <AdminForm title="Add topic" icon={<ListPlus />} badge="topics" disabled={isSaving} onSubmit={(form) => submit({
           type: "topic",
           subjectId: value(form, "subjectId"),
           name: value(form, "name"),
@@ -97,7 +165,19 @@ export default function AdminPage() {
           <Select name="grade" label="Grade" options={["10", "11", "12"]} defaultValue="12" />
         </AdminForm>
 
-        <AdminForm title="Add past-paper metadata" icon={<BookPlus />} badge="papers" onSubmit={(form) => submit({
+        <AdminForm title="Upload past paper and solution" icon={<Upload />} badge="paper files" disabled={isSaving} onSubmit={submitPaperUpload}>
+          <OptionSelect name="subjectId" label="Subject" options={subjects} />
+          <Select name="grade" label="Grade" options={["10", "11", "12"]} defaultValue="12" />
+          <Input name="year" label="Year" type="number" defaultValue="2025" />
+          <Input name="examSession" label="Exam session" defaultValue="November" />
+          <Input name="paperNumber" label="Paper number" defaultValue="Paper 1" />
+          <Input name="sourceName" label="Source name" defaultValue="Admin uploaded past paper" />
+          <Input name="sourceUrl" label="Source URL" defaultValue="https://www.education.gov.za/?link=599&mid=1741&tabid=593" />
+          <FileInput name="paperFile" label="Past paper PDF" />
+          <FileInput name="memoFile" label="Solution memo PDF" />
+        </AdminForm>
+
+        <AdminForm title="Add past-paper metadata" icon={<BookPlus />} badge="papers" disabled={isSaving} onSubmit={(form) => submit({
           type: "pastPaper",
           subjectId: value(form, "subjectId"),
           grade: numberValue(form, "grade"),
@@ -120,7 +200,7 @@ export default function AdminPage() {
           <Input name="sourceUrl" label="Source URL" defaultValue="https://www.education.gov.za/?link=599&mid=1741&tabid=593" />
         </AdminForm>
 
-        <AdminForm title="Add paper question metadata" icon={<BookPlus />} badge="questions" onSubmit={(form) => submit({
+        <AdminForm title="Add paper question metadata" icon={<BookPlus />} badge="questions" disabled={isSaving} onSubmit={(form) => submit({
           type: "paperQuestion",
           pastPaperId: value(form, "pastPaperId"),
           questionNumber: value(form, "questionNumber"),
@@ -139,36 +219,52 @@ export default function AdminPage() {
           <Input name="memoPageNumber" label="Memo page" type="number" defaultValue="4" />
         </AdminForm>
 
-        <AdminForm title="Add bursary" icon={<Database />} badge="bursaries" onSubmit={(form) => submit({
+        <AdminForm title="Add bursary" icon={<Database />} badge="bursaries" disabled={isSaving} onSubmit={(form) => submit({
           type: "bursary",
           name: value(form, "name"),
           provider: value(form, "provider"),
           fieldOfStudy: value(form, "fieldOfStudy"),
+          fundingType: value(form, "fundingType") || undefined,
+          studyLevels: listValue(form, "studyLevels"),
+          eligibilityCriteriaJson: listValue(form, "eligibilityCriteria"),
           minAverage: numberValue(form, "minAverage"),
           minSubjectRequirementsJson: subjectRequirements(value(form, "subjectRequirements")),
           provinceRequirements: listValue(form, "provinceRequirements"),
           citizenshipRequirements: value(form, "citizenshipRequirements"),
           deadline: value(form, "deadline"),
+          officialStatus: value(form, "officialStatus") as "open" | "closing" | "closed" | "unknown",
           applicationUrl: value(form, "applicationUrl"),
           requiredDocumentsJson: listValue(form, "requiredDocuments"),
           sourceUrl: value(form, "sourceUrl"),
-          lastVerifiedAt: value(form, "lastVerifiedAt")
+          lastVerifiedAt: value(form, "lastVerifiedAt"),
+          lastCheckedAt: value(form, "lastCheckedAt"),
+          applicationWindow: value(form, "applicationWindow") || undefined,
+          summary: value(form, "summary") || undefined,
+          notes: value(form, "notes") || undefined
         })}>
           <Input name="name" label="Bursary name" defaultValue="Verified Example Bursary" />
           <Input name="provider" label="Provider" defaultValue="Provider name" />
           <Input name="fieldOfStudy" label="Field of study" defaultValue="Engineering" />
+          <Input name="fundingType" label="Funding type" defaultValue="bursary" />
+          <Input name="studyLevels" label="Study levels" defaultValue="undergraduate" />
+          <Input name="eligibilityCriteria" label="Eligibility criteria" defaultValue="South African citizen,Financial need" />
           <Input name="minAverage" label="Minimum average" type="number" defaultValue="65" />
           <Input name="subjectRequirements" label="Subject requirements" defaultValue="Mathematics:60,Physical Sciences:60" />
           <Input name="provinceRequirements" label="Province requirements" defaultValue="All provinces" />
           <Input name="citizenshipRequirements" label="Citizenship requirements" defaultValue="South African citizen" />
           <Input name="deadline" label="Deadline" type="date" />
+          <Select name="officialStatus" label="Official status" options={["open", "closing", "closed", "unknown"]} defaultValue="unknown" />
           <Input name="applicationUrl" label="Application URL" defaultValue="https://example.org/apply" />
           <Input name="requiredDocuments" label="Required documents" defaultValue="ID document,Latest school report" />
           <Input name="sourceUrl" label="Source URL" defaultValue="https://example.org/source" />
           <Input name="lastVerifiedAt" label="Last verified" type="date" />
+          <Input name="lastCheckedAt" label="Last checked" type="date" />
+          <Input name="applicationWindow" label="Application window" defaultValue="Open through the official portal." />
+          <Input name="summary" label="Summary" defaultValue="Short description of the bursary." />
+          <Input name="notes" label="Notes" defaultValue="Use the official portal for the current cycle." />
         </AdminForm>
 
-        <AdminForm title="Add university APS rule" icon={<Database />} badge="APS rules" onSubmit={(form) => submit({
+        <AdminForm title="Add university APS rule" icon={<Database />} badge="APS rules" disabled={isSaving} onSubmit={(form) => submit({
           type: "apsRule",
           institutionName: value(form, "institutionName"),
           programmeName: value(form, "programmeName"),
@@ -189,12 +285,11 @@ export default function AdminPage() {
         <h2 className="text-xl font-black">Learner progress summary</h2>
         <p className="mt-2 text-sm leading-6 text-ink/65">Next production step: aggregate learner progress by class and export CSV summaries for teachers.</p>
       </Card>
-      <style jsx>{`.input{margin-top:.5rem;width:100%;border-radius:.5rem;border:1px solid rgb(23 33 43 / .15);padding:.75rem;background:white}`}</style>
     </AppShell>
   );
 }
 
-function AdminForm({ title, icon, badge, children, onSubmit }: { title: string; icon: React.ReactNode; badge: string; children: React.ReactNode; onSubmit: (form: FormData) => void }) {
+function AdminForm({ title, icon, badge, children, disabled = false, onSubmit }: { title: string; icon: React.ReactNode; badge: string; children: React.ReactNode; disabled?: boolean; onSubmit: (form: FormData) => void }) {
   return (
     <Card>
       <form onSubmit={(event) => {
@@ -207,7 +302,7 @@ function AdminForm({ title, icon, badge, children, onSubmit }: { title: string; 
         </div>
         <h2 className="mt-4 text-xl font-black">{title}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">{children}</div>
-        <button className="focus-ring mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-black text-white">Save</button>
+        <button disabled={disabled} className="focus-ring mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-black text-white disabled:opacity-60">Save</button>
       </form>
     </Card>
   );
@@ -215,6 +310,10 @@ function AdminForm({ title, icon, badge, children, onSubmit }: { title: string; 
 
 function Input({ label, name, type = "text", defaultValue }: { label: string; name: string; type?: string; defaultValue?: string }) {
   return <label className="text-sm font-bold">{label}<input className="input" name={name} type={type} defaultValue={defaultValue} /></label>;
+}
+
+function FileInput({ label, name }: { label: string; name: string }) {
+  return <label className="text-sm font-bold">{label}<input className="input" name={name} type="file" accept="application/pdf,.pdf" required /></label>;
 }
 
 function Select({ label, name, options, defaultValue }: { label: string; name: string; options: string[]; defaultValue?: string }) {

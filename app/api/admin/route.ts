@@ -44,15 +44,23 @@ const requestSchema = z.discriminatedUnion("type", [
     name: z.string().min(1),
     provider: z.string().min(1),
     fieldOfStudy: z.string().min(1),
+    fundingType: z.string().optional(),
+    studyLevels: z.array(z.string()).default([]),
+    eligibilityCriteriaJson: z.array(z.string()).default([]),
     minAverage: z.number().min(0).max(100).optional(),
     minSubjectRequirementsJson: z.array(z.object({ subject: z.string(), minMark: z.number() })).default([]),
     provinceRequirements: z.array(z.string()).default(["All provinces"]),
     citizenshipRequirements: z.string().optional(),
     deadline: z.string().optional(),
+    officialStatus: z.enum(["open", "closing", "closed", "unknown"]).default("unknown"),
     applicationUrl: z.string().url(),
     requiredDocumentsJson: z.array(z.string()).default([]),
     sourceUrl: z.string().url(),
-    lastVerifiedAt: z.string().optional()
+    lastVerifiedAt: z.string().optional(),
+    lastCheckedAt: z.string().optional(),
+    applicationWindow: z.string().optional(),
+    summary: z.string().optional(),
+    notes: z.string().optional()
   }),
   z.object({
     type: z.literal("apsRule"),
@@ -113,15 +121,23 @@ async function insertAdminRecord(admin: SupabaseClient, body: z.infer<typeof req
         name: body.name,
         provider: body.provider,
         field_of_study: body.fieldOfStudy,
+        funding_type: body.fundingType,
+        study_levels: body.studyLevels,
+        eligibility_criteria_json: body.eligibilityCriteriaJson,
         min_average: body.minAverage,
         min_subject_requirements_json: body.minSubjectRequirementsJson,
         province_requirements: body.provinceRequirements,
         citizenship_requirements: body.citizenshipRequirements,
         deadline: body.deadline,
+        official_status: body.officialStatus,
         application_url: body.applicationUrl,
         required_documents_json: body.requiredDocumentsJson,
         source_url: body.sourceUrl,
-        last_verified_at: body.lastVerifiedAt
+        last_verified_at: body.lastVerifiedAt,
+        last_checked_at: body.lastCheckedAt,
+        application_window: body.applicationWindow,
+        summary: body.summary,
+        notes: body.notes
       }).select().single();
     case "apsRule":
       return admin.from("aps_rules").upsert({

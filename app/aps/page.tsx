@@ -6,6 +6,8 @@ import { Badge, Card, PageHeader, ProgressBar } from "@/components/ui";
 import { calculateAps, calculateAverage, estimateFinalMark, evaluateApsRule, simulateWhatIf, subjectRisk } from "@/lib/aps";
 import { loadApsRules } from "@/lib/content-data";
 import { updateLearnerSubjectMarks } from "@/lib/learner-profile";
+import { matchProgrammes } from "@/lib/programme-matches";
+import { programmeRules } from "@/lib/programme-rules";
 import { demoProfile, sampleApsRules } from "@/lib/sample-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
@@ -24,6 +26,7 @@ export default function ApsPage() {
   const selectedRule = rules.find((rule) => rule.id === selectedRuleId) ?? rules[0];
   const prediction = evaluateApsRule(subjects, selectedRule);
   const simulation = useMemo(() => simulateWhatIf(subjects, whatIfSubject, whatIfMark, selectedRule), [subjects, whatIfSubject, whatIfMark, selectedRule]);
+  const programmeMatches = useMemo(() => matchProgrammes(subjects, rules), [subjects, rules]);
 
   useEffect(() => {
     if (profile.subjects.length === 0) return;
@@ -34,8 +37,9 @@ export default function ApsPage() {
   useEffect(() => {
     async function loadRules() {
       const loadedRules = await loadApsRules(getSupabaseBrowserClient());
-      setRules(loadedRules);
-      setSelectedRuleId(loadedRules[0]?.id ?? sampleApsRules[0].id);
+      const combinedRules = mergeRules(loadedRules, programmeRules);
+      setRules(combinedRules);
+      setSelectedRuleId(combinedRules[0]?.id ?? sampleApsRules[0].id);
     }
 
     loadRules();
@@ -61,8 +65,8 @@ export default function ApsPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Matric / APS Predictor" eyebrow={isDemo ? "Configurable sample rules" : "Your saved profile"}>
-        APS rules differ by institution and programme. This MVP stores rules as JSON and labels sample data clearly.
+      <PageHeader title="Course Match APS Calculator" eyebrow={isDemo ? "Using demo marks" : "Using your saved profile"}>
+        Enter your marks to see which university programmes you may qualify for. Matches are estimates and must be checked against official university requirements.
       </PageHeader>
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <Card>
@@ -100,24 +104,14 @@ export default function ApsPage() {
         </Card>
         <div className="space-y-4">
           <Card>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-black">Prediction</h2>
-              <Badge tone="sample">{selectedRule.sampleData ? "Sample APS rule" : "Stored APS rule"}</Badge>
-            </div>
-            <label className="mt-4 block text-sm font-bold">Institution programme
-              <select className="focus-ring mt-2 w-full rounded-lg border border-ink/15 px-3 py-2" value={selectedRuleId} onChange={(event) => setSelectedRuleId(event.target.value)}>
-                {rules.map((rule) => <option key={rule.id} value={rule.id}>{rule.institutionName} - {rule.programmeName}</option>)}
-              </select>
-            </label>
+            <h2 className="text-xl font-black">Your APS summary</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <Metric label="Current average" value={`${calculateAverage(subjects)}%`} />
               <Metric label="APS estimate" value={String(calculateAps(subjects, selectedRule))} />
             </div>
-            <p className="mt-4 font-bold">{selectedRule.institutionName}: {selectedRule.programmeName}</p>
-            <Badge tone={prediction.eligibilityStatus === "Likely qualifies" ? "safe" : prediction.eligibilityStatus === "Watch requirements" ? "watch" : "risk"}>{prediction.eligibilityStatus}</Badge>
-            <ul className="mt-4 space-y-2 text-sm leading-6 text-ink/70">
-              {prediction.explanation.map((item) => <li key={item}>{item}</li>)}
-            </ul>
+            <p className="mt-4 rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/65">
+              This APS uses common NSC levels and excludes Life Orientation. Programme matches below also check stored minimum subjects where available.
+            </p>
           </Card>
           <Card>
             <h2 className="text-xl font-black">What if simulator</h2>
@@ -135,8 +129,73 @@ export default function ApsPage() {
           </Card>
         </div>
       </div>
+      <Card className="mt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black">Courses you may qualify for</h2>
+            <p className="mt-1 text-sm text-ink/65">{programmeMatches.length} programme rules checked across universities.</p>
+          </div>
+          <Badge tone="sample">Estimate only</Badge>
+        </div>
+        <p className="mt-3 rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/70">
+          For UCT, UP, and NWU we also show prospectus context from the official undergraduate prospectuses so the match card includes the local APS method, closing-date context, and selection notes where available.
+        </p>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {programmeMatches.map((match) => (
+            <div key={match.rule.id} className="rounded-lg border border-ink/10 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-ink/55">{match.rule.institutionName}</p>
+                  <h3 className="mt-1 text-lg font-black">{match.rule.programmeName}</h3>
+                </div>
+                <Badge tone={match.prediction.eligibilityStatus === "Likely qualifies" ? "safe" : match.prediction.eligibilityStatus === "Watch requirements" ? "watch" : "risk"}>
+                  {match.prediction.eligibilityStatus}
+                </Badge>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <Info label="Required APS" value={String(match.rule.ruleJson.minimumTotal ?? "Check source")} />
+                <Info label="Your gap" value={match.apsGap >= 0 ? `+${match.apsGap}` : String(match.apsGap)} />
+              </div>
+              {match.missingSubjects.length > 0 || match.belowMinimumSubjects.length > 0 ? (
+                <p className="mt-3 rounded-lg bg-protea/10 p-3 text-sm font-semibold leading-6 text-ink/75">
+                  Watch: {match.missingSubjects.concat(match.belowMinimumSubjects).join(", ")}
+                </p>
+              ) : (
+                <p className="mt-3 rounded-lg bg-veld/10 p-3 text-sm font-semibold text-ink/75">Subject minimums in our stored rule are met.</p>
+              )}
+              {match.rule.prospectusNotes?.length ? (
+                <div className="mt-3 rounded-lg border border-veld/15 bg-veld/5 p-3">
+                  <p className="text-xs font-black uppercase tracking-wide text-veld">Prospectus context</p>
+                  <ul className="mt-2 space-y-1 text-sm leading-6 text-ink/75">
+                    {match.rule.prospectusNotes.map((note) => (
+                      <li key={note}>- {note}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <a href={match.rule.sourceUrl} target="_blank" className="focus-ring inline-flex rounded-lg border border-ink/15 px-3 py-2 text-sm font-black text-ink">
+                  Verify official requirements
+                </a>
+                {match.rule.prospectusUrl ? (
+                  <a href={match.rule.prospectusUrl} target="_blank" className="focus-ring inline-flex rounded-lg border border-veld/20 bg-veld/5 px-3 py-2 text-sm font-black text-veld">
+                    Open prospectus
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </AppShell>
   );
+}
+
+function mergeRules(primary: ApsRule[], fallback: ApsRule[]) {
+  const merged = new Map<string, ApsRule>();
+  for (const rule of fallback) merged.set(`${rule.institutionName}|${rule.programmeName}`, rule);
+  for (const rule of primary) merged.set(`${rule.institutionName}|${rule.programmeName}`, rule);
+  return Array.from(merged.values());
 }
 
 function updateSubject(id: string, field: "currentMark" | "targetMark", value: number, setSubjects: React.Dispatch<React.SetStateAction<LearnerSubject[]>>) {
@@ -145,4 +204,8 @@ function updateSubject(id: string, field: "currentMark" | "targetMark", value: n
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg bg-chalk p-4"><p className="text-sm font-bold text-ink/60">{label}</p><p className="mt-1 text-3xl font-black">{value}</p></div>;
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg bg-chalk p-3"><p className="text-xs font-bold text-ink/55">{label}</p><p className="mt-1 font-black">{value}</p></div>;
 }

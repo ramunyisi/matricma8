@@ -1,11 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { GraduationCap, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { friendlyError } from "@/lib/utils";
+import matricLogo from "../../../matriclogo.png";
 
 export default function LoginPage() {
   const [message, setMessage] = useState("");
@@ -48,9 +50,9 @@ function AuthCard({ title, message, isSubmitting, onSubmit }: { title: string; m
     <main className="grid min-h-screen place-items-center bg-chalk px-4">
       <form onSubmit={onSubmit} className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
         <div className="flex items-center gap-2">
-          <span className="grid h-10 w-10 place-items-center rounded-lg bg-veld text-white"><GraduationCap size={22} /></span>
+          <Image src={matricLogo} alt="MatricSA logo" width={40} height={40} className="h-10 w-10 rounded-lg object-contain" />
           <div>
-            <p className="text-sm font-bold text-veld">MatricMate SA</p>
+            <p className="text-sm font-bold text-veld">MatricSA</p>
             <h1 className="text-2xl font-black">{title}</h1>
           </div>
         </div>

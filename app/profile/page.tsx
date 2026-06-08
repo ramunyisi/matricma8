@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Card, PageHeader, ProgressBar } from "@/components/ui";
 import { getCurrentUser, saveLearnerProfile } from "@/lib/learner-profile";
@@ -21,6 +22,7 @@ export default function ProfilePage() {
   const [examDate, setExamDate] = useState("");
   const [careerInterests, setCareerInterests] = useState("");
   const [preferredStudyTimes, setPreferredStudyTimes] = useState("");
+  const [pendingSubject, setPendingSubject] = useState(sampleSubjects[0]);
   const [marks, setMarks] = useState<Record<string, { currentMark: number; targetMark: number }>>({});
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -39,6 +41,7 @@ export default function ProfilePage() {
   }, [profile]);
 
   const subjectRows = useMemo(() => selected.map((name) => ({ name, currentMark: marks[name]?.currentMark ?? 50, targetMark: marks[name]?.targetMark ?? 65 })), [selected, marks]);
+  const availableSubjects = useMemo(() => sampleSubjects.filter((subject) => !selected.includes(subject)), [selected]);
 
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -94,21 +97,52 @@ export default function ProfilePage() {
         </Card>
         <Card>
           <h2 className="text-xl font-black">Subjects and marks</h2>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {sampleSubjects.map((subject) => (
-              <label key={subject} className="flex items-center gap-2 rounded-lg border border-ink/10 p-3 text-sm font-semibold">
-                <input type="checkbox" checked={selected.includes(subject)} onChange={() => toggleSubject(subject, setSelected, setMarks)} />
-                {subject}
-              </label>
-            ))}
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <label className="text-sm font-bold text-ink/80">
+              Add a subject from the DBE list
+              <select className="input mt-2" value={pendingSubject} onChange={(event) => setPendingSubject(event.target.value)}>
+                {availableSubjects.length === 0 ? <option value="">No subjects left to add</option> : null}
+                {availableSubjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!pendingSubject || availableSubjects.length === 0}
+              onClick={() => {
+                if (!pendingSubject || selected.includes(pendingSubject)) return;
+                setSelected((current) => [...current, pendingSubject]);
+                setMarks((current) => ({ ...current, [pendingSubject]: current[pendingSubject] ?? { currentMark: 50, targetMark: 65 } }));
+                setPendingSubject(availableSubjects.find((subject) => subject !== pendingSubject) ?? availableSubjects[0] ?? "");
+              }}
+              className="focus-ring h-12 self-end rounded-lg bg-ink px-4 text-sm font-black text-white disabled:opacity-60"
+            >
+              Add subject
+            </button>
           </div>
+          <p className="mt-2 text-xs font-semibold leading-5 text-ink/55">
+            The list is based on DBE past-paper subjects and common NSC subject names. Add only the subjects the learner actually takes.
+          </p>
           <div className="mt-5 space-y-4">
             {subjectRows.map((subject) => (
-              <div key={subject.name}>
-                <div className="flex items-center justify-between">
+              <div key={subject.name} className="rounded-lg border border-ink/10 p-3">
+                <div className="flex items-start justify-between gap-3">
                   <p className="font-bold">{subject.name}</p>
-                  <p className="text-sm text-ink/60">{subject.currentMark}% now</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelected((current) => current.filter((item) => item !== subject.name));
+                      setMarks((current) => {
+                        const next = { ...current };
+                        delete next[subject.name];
+                        return next;
+                      });
+                    }}
+                    className="focus-ring inline-flex items-center gap-1 rounded-lg border border-ink/10 px-2 py-1 text-xs font-black text-ink/65"
+                  >
+                    <X size={14} /> Remove
+                  </button>
                 </div>
+                <p className="text-sm text-ink/60">{subject.currentMark}% now</p>
                 <ProgressBar value={subject.currentMark} target={subject.targetMark} />
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <Field label="Current mark"><input className="input" type="number" min="0" max="100" value={subject.currentMark} onChange={(event) => updateMark(subject.name, "currentMark", Number(event.target.value), setMarks)} /></Field>
@@ -122,7 +156,6 @@ export default function ProfilePage() {
           </button>
         </Card>
       </form>
-      <style jsx>{`.input{margin-top:.5rem;width:100%;border-radius:.5rem;border:1px solid rgb(23 33 43 / .15);padding:.75rem;background:white}`}</style>
     </AppShell>
   );
 }
@@ -133,11 +166,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function splitList(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
-}
-
-function toggleSubject(subject: string, setSelected: React.Dispatch<React.SetStateAction<string[]>>, setMarks: React.Dispatch<React.SetStateAction<Record<string, { currentMark: number; targetMark: number }>>>) {
-  setSelected((current) => current.includes(subject) ? current.filter((item) => item !== subject) : [...current, subject]);
-  setMarks((current) => ({ ...current, [subject]: current[subject] ?? { currentMark: 50, targetMark: 65 } }));
 }
 
 function updateMark(subjectName: string, field: "currentMark" | "targetMark", value: number, setMarks: React.Dispatch<React.SetStateAction<Record<string, { currentMark: number; targetMark: number }>>>) {

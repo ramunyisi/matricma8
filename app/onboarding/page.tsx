@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Card, PageHeader, ProgressBar } from "@/components/ui";
 import { provinces, sampleSubjects } from "@/lib/sample-data";
@@ -20,6 +21,7 @@ export default function OnboardingPage() {
   const [examDate, setExamDate] = useState("2026-10-19");
   const [careerInterests, setCareerInterests] = useState("Engineering, data science, commerce");
   const [preferredStudyTimes, setPreferredStudyTimes] = useState("Weekday evenings, Saturday morning");
+  const [pendingSubject, setPendingSubject] = useState(sampleSubjects[0]);
   const [marks, setMarks] = useState<Record<string, { currentMark: number; targetMark: number }>>(
     Object.fromEntries(sampleSubjects.map((subject, index) => [subject, { currentMark: 45 + index * 2, targetMark: 65 }]))
   );
@@ -27,6 +29,7 @@ export default function OnboardingPage() {
   const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
   const subjectRows = useMemo(() => selected.map((name) => ({ name, ...marks[name] })), [selected, marks]);
+  const availableSubjects = useMemo(() => sampleSubjects.filter((subject) => !selected.includes(subject)), [selected]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,7 +73,12 @@ export default function OnboardingPage() {
       await saveLearnerProfile(supabase, data.user, payload);
       router.replace("/dashboard");
     } catch (error) {
-      setMessage(friendlyError(error, "Could not save profile."));
+      const message = friendlyError(error, "Could not save profile.");
+      setMessage(message);
+      if (isStaleAuthSessionError(error)) {
+        await getSupabaseBrowserClient()?.auth.signOut();
+        router.replace("/auth/login");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -97,25 +105,52 @@ export default function OnboardingPage() {
         </Card>
         <Card>
           <h2 className="text-xl font-black">Subjects and marks</h2>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {sampleSubjects.map((subject) => (
-              <label key={subject} className="flex items-center gap-2 rounded-lg border border-ink/10 p-3 text-sm font-semibold">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(subject)}
-                  onChange={() => setSelected((current) => current.includes(subject) ? current.filter((item) => item !== subject) : [...current, subject])}
-                />
-                {subject}
-              </label>
-            ))}
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <label className="text-sm font-bold text-ink/80">
+              Add a subject from the DBE list
+              <select className="input mt-2" value={pendingSubject} onChange={(event) => setPendingSubject(event.target.value)}>
+                {availableSubjects.length === 0 ? <option value="">No subjects left to add</option> : null}
+                {availableSubjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!pendingSubject || availableSubjects.length === 0}
+              onClick={() => {
+                if (!pendingSubject || selected.includes(pendingSubject)) return;
+                setSelected((current) => [...current, pendingSubject]);
+                setMarks((current) => ({ ...current, [pendingSubject]: current[pendingSubject] ?? { currentMark: 50, targetMark: 65 } }));
+                setPendingSubject(availableSubjects.find((subject) => subject !== pendingSubject) ?? availableSubjects[0] ?? "");
+              }}
+              className="focus-ring h-12 self-end rounded-lg bg-ink px-4 text-sm font-black text-white disabled:opacity-60"
+            >
+              Add subject
+            </button>
           </div>
+          <p className="mt-2 text-xs font-semibold leading-5 text-ink/55">
+            The list is based on DBE past-paper subjects and common NSC subject names. Add only the subjects the learner actually takes.
+          </p>
           <div className="mt-5 space-y-4">
             {subjectRows.map((subject) => (
-              <div key={subject.name}>
-                <div className="flex items-center justify-between">
+              <div key={subject.name} className="rounded-lg border border-ink/10 p-3">
+                <div className="flex items-start justify-between gap-3">
                   <p className="font-bold">{subject.name}</p>
-                  <p className="text-sm text-ink/60">{subject.currentMark}% now</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelected((current) => current.filter((item) => item !== subject.name));
+                      setMarks((current) => {
+                        const next = { ...current };
+                        delete next[subject.name];
+                        return next;
+                      });
+                    }}
+                    className="focus-ring inline-flex items-center gap-1 rounded-lg border border-ink/10 px-2 py-1 text-xs font-black text-ink/65"
+                  >
+                    <X size={14} /> Remove
+                  </button>
                 </div>
+                <p className="mt-1 text-sm text-ink/60">{subject.currentMark}% now</p>
                 <ProgressBar value={subject.currentMark} target={subject.targetMark} />
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="text-sm font-bold text-ink/75">Current mark
@@ -134,14 +169,6 @@ export default function OnboardingPage() {
           </button>
         </Card>
       </form>
-      <style jsx>{`
-        .input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid rgb(23 33 43 / 0.15);
-          padding: 0.75rem;
-        }
-      `}</style>
     </AppShell>
   );
 }
@@ -152,6 +179,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function splitList(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function isStaleAuthSessionError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const lower = message.toLowerCase();
+  return lower.includes("learner_profiles_user_id_fkey") || lower.includes("violates foreign key constraint");
 }
 
 function updateMark(

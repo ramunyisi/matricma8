@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MatricMate SA",
+  title: "MatricSA",
   description: "AI study coaching, APS prediction, past-paper navigation, and bursary matching for South African CAPS learners."
 };
 

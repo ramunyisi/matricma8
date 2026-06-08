@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateAps, evaluateApsRule, nscLevel, simulateWhatIf, subjectRisk } from "@/lib/aps";
+import { matchProgrammes } from "@/lib/programme-matches";
+import { programmeRules } from "@/lib/programme-rules";
 import { demoProfile, sampleApsRules } from "@/lib/sample-data";
 
 describe("APS calculation", () => {
@@ -31,5 +33,12 @@ describe("APS calculation", () => {
     expect(subjectRisk(72, 78)).toBe("Safe");
     expect(subjectRisk(52, 64)).toBe("Watch");
     expect(subjectRisk(38, 55)).toBe("At Risk");
+  });
+
+  it("ranks university programme matches by qualification status", () => {
+    const matches = matchProgrammes(demoProfile.subjects, programmeRules);
+    expect(matches.length).toBeGreaterThan(0);
+    expect(matches[0].prediction.eligibilityStatus).toBe("Likely qualifies");
+    expect(matches.some((match) => match.rule.institutionName.includes("University"))).toBe(true);
   });
 });

@@ -89,8 +89,22 @@ create table public.past_papers (
   paper_number text not null,
   paper_url text not null,
   memo_url text,
+  language text,
+  collection_title text,
+  external_id text,
   source_name text not null,
   source_url text not null,
+  created_at timestamptz not null default now()
+);
+
+create table public.dbe_exam_collections (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  year int,
+  exam_session text,
+  grade_scope text not null default 'Grade 12',
+  source_url text not null unique,
+  last_synced_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -143,15 +157,23 @@ create table public.bursaries (
   name text not null,
   provider text not null,
   field_of_study text not null,
+  funding_type text,
+  study_levels text[] not null default '{}',
+  eligibility_criteria_json jsonb not null default '[]'::jsonb,
   min_average numeric(5,2),
   min_subject_requirements_json jsonb not null default '[]'::jsonb,
   province_requirements text[] not null default '{}',
   citizenship_requirements text,
   deadline date,
+  official_status text not null default 'unknown',
   application_url text not null,
   required_documents_json jsonb not null default '[]'::jsonb,
   source_url text not null,
   last_verified_at date,
+  last_checked_at date,
+  application_window text,
+  summary text,
+  notes text,
   created_at timestamptz not null default now()
 );
 
@@ -170,6 +192,8 @@ create index learner_profiles_user_id_idx on public.learner_profiles(user_id);
 create index learner_subjects_learner_id_idx on public.learner_subjects(learner_id);
 create index marks_learner_subject_idx on public.marks(learner_id, subject_id);
 create index past_papers_lookup_idx on public.past_papers(grade, subject_id, year, exam_session);
+create unique index past_papers_external_id_idx on public.past_papers(external_id) where external_id is not null;
+create index past_papers_search_idx on public.past_papers(year, exam_session, paper_number, language);
 create index paper_questions_topic_idx on public.paper_questions(topic_id, difficulty);
 create index bursaries_deadline_idx on public.bursaries(deadline);
 
@@ -182,6 +206,7 @@ alter table public.marks enable row level security;
 alter table public.subjects enable row level security;
 alter table public.topics enable row level security;
 alter table public.past_papers enable row level security;
+alter table public.dbe_exam_collections enable row level security;
 alter table public.paper_questions enable row level security;
 alter table public.paper_pages enable row level security;
 alter table public.aps_rules enable row level security;
@@ -199,6 +224,7 @@ create policy "learners can update own profile" on public.learner_profiles for u
 create policy "public read subjects" on public.subjects for select to authenticated using (true);
 create policy "public read topics" on public.topics for select to authenticated using (true);
 create policy "public read past papers" on public.past_papers for select to authenticated using (true);
+create policy "public read dbe exam collections" on public.dbe_exam_collections for select to authenticated using (true);
 create policy "public read questions" on public.paper_questions for select to authenticated using (true);
 create policy "public read paper pages" on public.paper_pages for select to authenticated using (true);
 create policy "public read aps rules" on public.aps_rules for select to authenticated using (true);

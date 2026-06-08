@@ -42,6 +42,8 @@ export type ApsRule = {
   }[];
   sourceUrl: string;
   lastVerifiedAt: string;
+  prospectusUrl?: string;
+  prospectusNotes?: string[];
   sampleData?: boolean;
 };
 
@@ -56,18 +58,26 @@ export type Bursary = {
   name: string;
   provider: string;
   fieldOfStudy: string;
+  fundingType?: string;
+  studyLevels?: string[];
+  eligibilityCriteriaJson?: string[];
   minAverage: number;
   minSubjectRequirementsJson: { subject: string; minMark: number }[];
   provinceRequirements: string[];
   citizenshipRequirements: string;
   deadline: string;
+  officialStatus?: "open" | "closing" | "closed" | "unknown";
   applicationUrl: string;
   requiredDocumentsJson: string[];
   sourceUrl: string;
   lastVerifiedAt: string;
+  lastCheckedAt?: string;
   sampleData?: boolean;
   grade12Only?: boolean;
   universityStudentsOnly?: boolean;
+  applicationWindow?: string;
+  summary?: string;
+  notes?: string;
 };
 
 export type BursaryMatch = {
@@ -95,6 +105,24 @@ export type PastPaperQuestion = {
   memoUrl: string;
   sourceName: string;
   sourceUrl: string;
+};
+
+export type PastPaper = {
+  id: string;
+  grade: 10 | 11 | 12;
+  subject: string;
+  year: number;
+  examSession: string;
+  paperNumber: string;
+  paperUrl: string;
+  memoUrl?: string;
+  paperFilename: string;
+  memoFilename?: string;
+  language?: string;
+  collectionTitle?: string;
+  sourceName: string;
+  sourceUrl: string;
+  sampleData?: boolean;
 };
 
 export type StudyTask = {

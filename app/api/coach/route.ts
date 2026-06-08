@@ -47,12 +47,6 @@ export async function POST(request: Request) {
     }
 
     if (body.type === "relatedPracticeQuestion") {
-      if (!process.env.OPENAI_API_KEY) {
-        return NextResponse.json(
-          { error: "OpenAI is not configured. Add OPENAI_API_KEY to .env.local and restart the dev server." },
-          { status: 503 }
-        );
-      }
       const result = await generateRelatedPracticeQuestion(body.questionMetadata);
       return NextResponse.json({ result, verified: false });
     }
@@ -67,9 +61,9 @@ export async function POST(request: Request) {
 function coachErrorMessage(error: unknown) {
   const typed = error as { status?: number; code?: string; message?: string };
   if (typed.status === 401 || typed.code === "invalid_api_key") {
-    return "OpenAI rejected the API key. Create a new key in OpenAI, update OPENAI_API_KEY in .env.local, and restart the dev server.";
+    return "Gemini rejected the API key. Create a new key in Google AI Studio, update GEMINI_API_KEY or GOOGLE_API_KEY in .env.local, and restart the dev server.";
   }
-  if (typed.status === 429) return "OpenAI rate limit or quota reached. Check your OpenAI billing and usage limits.";
+  if (typed.status === 429) return "Gemini rate limit or quota reached. Check your Google AI billing and usage limits.";
   if (typed.message) return typed.message;
   return "Could not generate an AI response.";
 }

@@ -1,11 +1,11 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import type { Bursary, LearnerProfile, LearnerSubject, PastPaperQuestion } from "@/lib/types";
 import { matchBursaries } from "@/lib/bursaries";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { predictRisk as localPredictRisk } from "@/lib/aps";
 
 const systemRules = `
-You are MatricMate SA, an AI study coach for South African CAPS Grade 10-12 learners.
+You are MatricSA, an AI study coach for South African CAPS Grade 10-12 learners.
 Be supportive, age-appropriate, and clear.
 Use simple English by default.
 Use South African school context.
@@ -13,9 +13,19 @@ Do not invent official facts, bursary deadlines, university requirements, paper 
 Always distinguish prediction from confirmed results.
 When official data is missing or unverified, say it needs verification from stored source URLs or official institution/provider pages.
 For learners under 18, encourage parent/guardian support for accounts, bursary applications, and sensitive decisions.
+
+You are a Grade 12 Mathematics tutor following the South African CAPS curriculum.
+
+Always:
+- Explain concepts simply
+- Show step-by-step solutions
+- Use South African exam terminology
+- Generate practice questions
+- Never just give answers
 `;
 
-const openAiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
 export type AiGroundingContext = {
   apsRules?: unknown[];
@@ -75,32 +85,58 @@ export function recommendBursaries(profile: LearnerProfile, bursaries: Bursary[]
 }
 
 async function runAiText(task: string, payload: unknown, fallback: string) {
-  if (!process.env.OPENAI_API_KEY) return fallback;
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const response = await client.chat.completions.create({
-    model: openAiModel,
-    temperature: 0.4,
-    messages: [
-      { role: "system", content: systemRules },
-      { role: "user", content: `${task}\n\nContext:\n${JSON.stringify(payload, null, 2)}` }
-    ]
-  });
-  return response.choices[0]?.message.content ?? fallback;
+  if (!geminiApiKey) return fallback;
+  try {
+    const client = new GoogleGenAI({ apiKey: geminiApiKey });
+    const response = await client.models.generateContent({
+      model: geminiModel,
+      contents: `${systemRules}\n\n${task}\n\nContext:\n${JSON.stringify(payload, null, 2)}`,
+      config: { temperature: 0.4 }
+    });
+    return response.text?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 async function runAiJson<T>(task: string, payload: unknown, fallback: T): Promise<T> {
-  if (!process.env.OPENAI_API_KEY) return fallback;
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const response = await client.chat.completions.create({
-    model: openAiModel,
-    temperature: 0.35,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: `${systemRules}\nReturn valid JSON only.` },
-      { role: "user", content: `${task}\n\nContext:\n${JSON.stringify(payload, null, 2)}` }
-    ]
-  });
-  const content = response.choices[0]?.message.content;
-  if (!content) return fallback;
-  return JSON.parse(content) as T;
+  if (!geminiApiKey) return fallback;
+  try {
+    const client = new GoogleGenAI({ apiKey: geminiApiKey });
+    const response = await client.models.generateContent({
+      model: geminiModel,
+      contents: `${systemRules}\nReturn valid JSON only.\n\n${task}\n\nContext:\n${JSON.stringify(payload, null, 2)}`,
+      config: { temperature: 0.35 }
+    });
+    const parsed = parseJsonResponse<T>(response.text);
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function parseJsonResponse<T>(value?: string | null): T | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates = [fenced?.[1], trimmed];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      const start = candidate.indexOf("{");
+      const end = candidate.lastIndexOf("}");
+      if (start >= 0 && end > start) {
+        try {
+          return JSON.parse(candidate.slice(start, end + 1)) as T;
+        } catch {
+          // keep trying
+        }
+      }
+    }
+  }
+
+  return null;
 }

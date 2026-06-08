@@ -1,5 +1,5 @@
 {
-  "name": "matricmate-sa",
+  "name": "matricsa",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,14 +9,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
+    "import:dbe-papers": "tsx scripts/import-dbe-papers.ts",
     "import:papers": "tsx scripts/import-papers.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.8.0",
     "@supabase/supabase-js": "^2.45.4",
     "dotenv": "^16.4.5",
     "lucide-react": "^0.468.0",
     "next": "^14.2.16",
-    "openai": "^4.71.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.13.3",
