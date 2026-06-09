@@ -19,6 +19,10 @@ export default function OnboardingPage() {
   const [homeLanguage, setHomeLanguage] = useState("English");
   const [internetAccessLevel, setInternetAccessLevel] = useState<InternetAccessLevel>("medium");
   const [examDate, setExamDate] = useState("2026-10-19");
+  const [whatsappPhone, setWhatsappPhone] = useState("");
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
+  const [whatsappStudyReminders, setWhatsappStudyReminders] = useState(true);
+  const [whatsappDeadlineReminders, setWhatsappDeadlineReminders] = useState(true);
   const [careerInterests, setCareerInterests] = useState("Engineering, data science, commerce");
   const [preferredStudyTimes, setPreferredStudyTimes] = useState("Weekday evenings, Saturday morning");
   const [pendingSubject, setPendingSubject] = useState(sampleSubjects[0]);
@@ -48,6 +52,10 @@ export default function OnboardingPage() {
       homeLanguage,
       internetAccessLevel,
       examDate,
+      whatsappPhone,
+      whatsappOptIn,
+      whatsappStudyReminders,
+      whatsappDeadlineReminders,
       careerInterests: splitList(careerInterests),
       preferredStudyTimes: splitList(preferredStudyTimes),
       subjects: subjectRows.map((subject) => ({
@@ -99,6 +107,27 @@ export default function OnboardingPage() {
             <Field label="Home language"><input value={homeLanguage} onChange={(event) => setHomeLanguage(event.target.value)} className="focus-ring input" /></Field>
             <Field label="Internet access"><select value={internetAccessLevel} onChange={(event) => setInternetAccessLevel(event.target.value as InternetAccessLevel)} className="focus-ring input"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></Field>
             <Field label="Exam or goal date"><input value={examDate} onChange={(event) => setExamDate(event.target.value)} className="focus-ring input" type="date" /></Field>
+          </div>
+          <div className="mt-4 rounded-lg border border-ink/10 p-4">
+            <p className="text-sm font-black">WhatsApp reminders</p>
+            <p className="mt-1 text-xs leading-5 text-ink/60">Add a South African number in international format, for example +27 82 123 4567. If enabled, MatricSA can send study and deadline reminders.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="WhatsApp number"><input value={whatsappPhone} onChange={(event) => setWhatsappPhone(event.target.value)} className="focus-ring input" placeholder="+27..." /></Field>
+              <Field label="WhatsApp opt-in">
+                <select value={String(whatsappOptIn)} onChange={(event) => setWhatsappOptIn(event.target.value === "true")} className="focus-ring input">
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </Field>
+              <label className="flex items-center gap-2 text-sm font-bold text-ink/75">
+                <input type="checkbox" checked={whatsappStudyReminders} onChange={(event) => setWhatsappStudyReminders(event.target.checked)} />
+                Send study reminders
+              </label>
+              <label className="flex items-center gap-2 text-sm font-bold text-ink/75">
+                <input type="checkbox" checked={whatsappDeadlineReminders} onChange={(event) => setWhatsappDeadlineReminders(event.target.checked)} />
+                Send deadline reminders
+              </label>
+            </div>
           </div>
           <Field label="Career interests"><input value={careerInterests} onChange={(event) => setCareerInterests(event.target.value)} className="focus-ring input" /></Field>
           <Field label="Preferred study times"><input value={preferredStudyTimes} onChange={(event) => setPreferredStudyTimes(event.target.value)} className="focus-ring input" /></Field>

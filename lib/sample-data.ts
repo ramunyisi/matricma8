@@ -67,6 +67,10 @@ export const demoProfile: LearnerProfile = {
   careerInterests: ["Engineering", "Data science", "Commerce"],
   preferredStudyTimes: ["Weekday evenings", "Saturday morning"],
   examDate: "2026-10-19",
+  whatsappPhone: "",
+  whatsappOptIn: false,
+  whatsappStudyReminders: false,
+  whatsappDeadlineReminders: false,
   subjects: [
     { id: "maths", name: "Mathematics", grade: 12, currentMark: 48, targetMark: 65 },
     { id: "phys", name: "Physical Sciences", grade: 12, currentMark: 52, targetMark: 68 },

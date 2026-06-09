@@ -16,8 +16,14 @@ const config: Config = {
         gold: "#f2b84b",
         sky: "#2274a5"
       },
+      fontFamily: {
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "-apple-system", "sans-serif"]
+      },
       boxShadow: {
-        soft: "0 18px 50px rgba(23, 33, 43, 0.12)"
+        soft: "0 18px 50px rgba(23, 33, 43, 0.12)",
+        card: "0 1px 3px rgba(23,33,43,0.06), 0 4px 12px rgba(23,33,43,0.04)",
+        "card-hover": "0 2px 6px rgba(23,33,43,0.09), 0 8px 24px rgba(23,33,43,0.07)",
+        elevated: "0 4px 16px rgba(23,33,43,0.10), 0 12px 40px rgba(23,33,43,0.08)"
       }
     }
   },

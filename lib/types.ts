@@ -23,6 +23,10 @@ export type LearnerProfile = {
   careerInterests: string[];
   preferredStudyTimes: string[];
   examDate: string;
+  whatsappPhone?: string;
+  whatsappOptIn?: boolean;
+  whatsappStudyReminders?: boolean;
+  whatsappDeadlineReminders?: boolean;
   subjects: LearnerSubject[];
 };
 

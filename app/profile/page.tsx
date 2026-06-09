@@ -20,6 +20,10 @@ export default function ProfilePage() {
   const [homeLanguage, setHomeLanguage] = useState("English");
   const [internetAccessLevel, setInternetAccessLevel] = useState<InternetAccessLevel>("medium");
   const [examDate, setExamDate] = useState("");
+  const [whatsappPhone, setWhatsappPhone] = useState("");
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
+  const [whatsappStudyReminders, setWhatsappStudyReminders] = useState(false);
+  const [whatsappDeadlineReminders, setWhatsappDeadlineReminders] = useState(false);
   const [careerInterests, setCareerInterests] = useState("");
   const [preferredStudyTimes, setPreferredStudyTimes] = useState("");
   const [pendingSubject, setPendingSubject] = useState(sampleSubjects[0]);
@@ -35,6 +39,10 @@ export default function ProfilePage() {
     setHomeLanguage(profile.homeLanguage);
     setInternetAccessLevel(profile.internetAccessLevel);
     setExamDate(profile.examDate);
+    setWhatsappPhone(profile.whatsappPhone ?? "");
+    setWhatsappOptIn(Boolean(profile.whatsappOptIn));
+    setWhatsappStudyReminders(Boolean(profile.whatsappStudyReminders));
+    setWhatsappDeadlineReminders(Boolean(profile.whatsappDeadlineReminders));
     setCareerInterests(profile.careerInterests.join(", "));
     setPreferredStudyTimes(profile.preferredStudyTimes.join(", "));
     setMarks(Object.fromEntries(profile.subjects.map((subject) => [subject.name, { currentMark: subject.currentMark, targetMark: subject.targetMark }])));
@@ -62,6 +70,10 @@ export default function ProfilePage() {
         homeLanguage,
         internetAccessLevel,
         examDate,
+        whatsappPhone,
+        whatsappOptIn,
+        whatsappStudyReminders,
+        whatsappDeadlineReminders,
         careerInterests: splitList(careerInterests),
         preferredStudyTimes: splitList(preferredStudyTimes),
         subjects: subjectRows
@@ -91,6 +103,27 @@ export default function ProfilePage() {
             <Field label="Home language"><input value={homeLanguage} onChange={(event) => setHomeLanguage(event.target.value)} className="input" /></Field>
             <Field label="Internet access"><select value={internetAccessLevel} onChange={(event) => setInternetAccessLevel(event.target.value as InternetAccessLevel)} className="input"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></Field>
             <Field label="Exam or goal date"><input value={examDate} onChange={(event) => setExamDate(event.target.value)} className="input" type="date" /></Field>
+          </div>
+          <div className="mt-4 rounded-lg border border-ink/10 p-4">
+            <p className="text-sm font-black">WhatsApp reminders</p>
+            <p className="mt-1 text-xs leading-5 text-ink/60">These settings control whether MatricSA can send study and bursary deadline reminders to your phone.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="WhatsApp number"><input value={whatsappPhone} onChange={(event) => setWhatsappPhone(event.target.value)} className="input" placeholder="+27..." /></Field>
+              <Field label="WhatsApp opt-in">
+                <select value={String(whatsappOptIn)} onChange={(event) => setWhatsappOptIn(event.target.value === "true")} className="input">
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </Field>
+              <label className="flex items-center gap-2 text-sm font-bold text-ink/75">
+                <input type="checkbox" checked={whatsappStudyReminders} onChange={(event) => setWhatsappStudyReminders(event.target.checked)} />
+                Send study reminders
+              </label>
+              <label className="flex items-center gap-2 text-sm font-bold text-ink/75">
+                <input type="checkbox" checked={whatsappDeadlineReminders} onChange={(event) => setWhatsappDeadlineReminders(event.target.checked)} />
+                Send deadline reminders
+              </label>
+            </div>
           </div>
           <Field label="Career interests"><input value={careerInterests} onChange={(event) => setCareerInterests(event.target.value)} className="input" /></Field>
           <Field label="Preferred study times"><input value={preferredStudyTimes} onChange={(event) => setPreferredStudyTimes(event.target.value)} className="input" /></Field>

@@ -8,6 +8,7 @@ import type { User } from "@supabase/supabase-js";
 import { BookOpen, Bot, Building2, Calculator, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route } from "lucide-react";
 import { getLearnerProfile } from "@/lib/learner-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
 import matricLogo from "../matriclogo.png";
 
@@ -105,9 +106,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/auth/login");
   }
 
+  const visibleNavItems = navItems.filter((item) => item.href !== "/admin" || role === "teacher_admin");
+
   return (
     <div className="min-h-screen bg-chalk">
-      <header className="sticky top-0 z-40 border-b border-ink/10 bg-chalk/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-ink/[.07] bg-chalk/95 shadow-[0_1px_0_rgba(23,33,43,0.04)] backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <Link href="/" className="flex items-center gap-2 font-black tracking-tight text-ink">
             <Image src={matricLogo} alt="MatricSA logo" width={36} height={36} className="h-9 w-9 rounded-lg object-contain" />
@@ -116,14 +119,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button className="focus-ring rounded-lg border border-ink/10 p-2 md:hidden" aria-label="Open navigation">
             <Menu size={20} />
           </button>
-          <nav className="hidden items-center gap-1 md:flex">
-            {navItems.filter((item) => item.href !== "/admin" || role === "teacher_admin").map((item) => {
+          <nav className="hidden items-center gap-0.5 md:flex">
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-ink/75 hover:bg-white hover:text-ink"
+                  className={cn(
+                    "focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
+                    isActive
+                      ? "bg-veld/[.08] text-veld"
+                      : "text-ink/60 hover:bg-white hover:text-ink"
+                  )}
                 >
                   <Icon size={16} />
                   {item.label}
@@ -132,8 +141,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
             {user ? (
               <div className="ml-2 flex items-center gap-2 border-l border-ink/10 pl-3">
-                <span className="max-w-40 truncate text-sm font-semibold text-ink/65">{user.email}</span>
-                <button onClick={logout} className="focus-ring inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-black text-white">
+                <button
+                  onClick={logout}
+                  className="focus-ring inline-flex items-center gap-2 rounded-xl bg-ink px-3 py-2 text-sm font-black text-white transition-opacity hover:opacity-85"
+                >
                   <LogOut size={16} />
                   Logout
                 </button>
@@ -145,31 +156,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="mx-auto max-w-7xl px-4 py-5 md:py-8">
         {isCheckingAuth ? (
           <div className="grid min-h-[55vh] place-items-center">
-            <div className="rounded-lg border border-ink/10 bg-white p-5 text-center shadow-sm">
+            <div className="rounded-xl border border-ink/[.07] bg-white p-6 text-center shadow-card">
               <p className="font-black">Checking your session...</p>
-              <p className="mt-2 text-sm text-ink/60">Loading MatricSA.</p>
+              <p className="mt-2 text-sm text-ink/55">Loading MatricSA.</p>
             </div>
           </div>
         ) : authMessage ? (
-          <div className="rounded-lg border border-protea/20 bg-protea/10 p-4 text-sm font-semibold text-ink">{authMessage}</div>
+          <div className="rounded-xl border border-protea/20 bg-protea/10 p-4 text-sm font-semibold text-ink">
+            {authMessage}
+          </div>
         ) : (
           <>
             {needsLearnerProfile ? (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gold/40 bg-gold/15 p-3 text-sm font-semibold text-ink">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold/30 bg-gold/10 p-4 text-sm font-semibold text-ink">
                 <span>Complete your learner profile to personalise study plans, APS estimates, and bursary matches.</span>
-                <Link href="/onboarding" className="focus-ring rounded-lg bg-ink px-3 py-2 font-black text-white">Set up profile</Link>
+                <Link href="/onboarding" className="focus-ring rounded-xl bg-ink px-3.5 py-2.5 font-black text-white">
+                  Set up profile
+                </Link>
               </div>
             ) : null}
             {children}
           </>
         )}
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-white px-2 py-2 md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/[.07] bg-white/95 px-2 py-2 shadow-[0_-2px_12px_rgba(23,33,43,0.07)] backdrop-blur-md md:hidden">
         <div className="grid grid-cols-6 gap-1">
-          {navItems.slice(0, 6).filter((item) => item.href !== "/admin" || role === "teacher_admin").map((item) => {
+          {visibleNavItems.slice(0, 6).map((item) => {
             const Icon = item.icon;
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
-              <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold text-ink/70">
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold transition-colors",
+                  isActive ? "text-veld" : "text-ink/50"
+                )}
+              >
                 <Icon size={18} />
                 <span>{item.label.replace("Past Papers", "Papers").replace("Universities", "Unis")}</span>
               </Link>
@@ -177,7 +200,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </div>
         {user ? (
-          <button onClick={logout} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-3 py-2 text-xs font-black text-white">
+          <button
+            onClick={logout}
+            className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2 text-xs font-black text-white"
+          >
             <LogOut size={14} />
             Logout
           </button>

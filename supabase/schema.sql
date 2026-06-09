@@ -22,6 +22,12 @@ create table public.learner_profiles (
   career_interests text[] not null default '{}',
   preferred_study_times text[] not null default '{}',
   exam_date date,
+  whatsapp_phone text,
+  whatsapp_opt_in boolean not null default false,
+  whatsapp_study_reminders boolean not null default false,
+  whatsapp_deadline_reminders boolean not null default false,
+  whatsapp_last_study_reminder_at date,
+  whatsapp_last_deadline_reminder_at date,
   created_at timestamptz not null default now(),
   unique (user_id)
 );
@@ -190,6 +196,31 @@ create table public.bursary_matches (
   unique (learner_id, bursary_id)
 );
 
+create table public.bursary_reminders (
+  id uuid primary key default gen_random_uuid(),
+  learner_id uuid not null references public.learner_profiles(id) on delete cascade,
+  bursary_id uuid not null references public.bursaries(id) on delete cascade,
+  saved boolean not null default true,
+  send_whatsapp boolean not null default false,
+  days_before_deadline int,
+  last_sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (learner_id, bursary_id)
+);
+
+create table public.notification_deliveries (
+  id uuid primary key default gen_random_uuid(),
+  learner_id uuid not null references public.learner_profiles(id) on delete cascade,
+  channel text not null default 'whatsapp',
+  reminder_type text not null,
+  reminder_key text not null,
+  payload_json jsonb not null default '{}'::jsonb,
+  sent_at timestamptz not null default now(),
+  status text not null default 'sent',
+  unique (learner_id, channel, reminder_type, reminder_key)
+);
+
 create index learner_profiles_user_id_idx on public.learner_profiles(user_id);
 create index learner_subjects_learner_id_idx on public.learner_subjects(learner_id);
 create index marks_learner_subject_idx on public.marks(learner_id, subject_id);
@@ -198,6 +229,9 @@ create unique index past_papers_external_id_idx on public.past_papers(external_i
 create index past_papers_search_idx on public.past_papers(year, exam_session, paper_number, language);
 create index paper_questions_topic_idx on public.paper_questions(topic_id, difficulty);
 create index bursaries_deadline_idx on public.bursaries(deadline);
+create index bursary_reminders_learner_id_idx on public.bursary_reminders(learner_id);
+create index bursary_reminders_bursary_id_idx on public.bursary_reminders(bursary_id);
+create index notification_deliveries_lookup_idx on public.notification_deliveries(learner_id, channel, reminder_type, reminder_key);
 
 alter table public.users enable row level security;
 alter table public.learner_profiles enable row level security;
@@ -215,6 +249,8 @@ alter table public.aps_rules enable row level security;
 alter table public.aps_predictions enable row level security;
 alter table public.bursaries enable row level security;
 alter table public.bursary_matches enable row level security;
+alter table public.bursary_reminders enable row level security;
+alter table public.notification_deliveries enable row level security;
 
 create policy "users can read own user row" on public.users for select using (auth.uid() = id);
 create policy "users can update own user row" on public.users for update using (auth.uid() = id);
@@ -259,6 +295,20 @@ create policy "own study tasks" on public.study_tasks for all using (
     from public.study_plans sp
     join public.learner_profiles lp on lp.id = sp.learner_id
     where sp.id = study_tasks.study_plan_id and lp.user_id = auth.uid()
+  )
+);
+
+create policy "own bursary reminders" on public.bursary_reminders for all using (
+  exists (
+    select 1 from public.learner_profiles lp
+    where lp.id = bursary_reminders.learner_id and lp.user_id = auth.uid()
+  )
+);
+
+create policy "own notification deliveries" on public.notification_deliveries for select using (
+  exists (
+    select 1 from public.learner_profiles lp
+    where lp.id = notification_deliveries.learner_id and lp.user_id = auth.uid()
   )
 );
 

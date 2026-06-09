@@ -12,6 +12,10 @@ type LearnerProfileRow = {
   career_interests: string[] | null;
   preferred_study_times: string[] | null;
   exam_date: string | null;
+  whatsapp_phone: string | null;
+  whatsapp_opt_in: boolean | null;
+  whatsapp_study_reminders: boolean | null;
+  whatsapp_deadline_reminders: boolean | null;
   learner_subjects?: Array<{
     id: string;
     current_mark: number | string;
@@ -43,6 +47,10 @@ export type OnboardingProfileInput = {
   careerInterests: string[];
   preferredStudyTimes: string[];
   examDate?: string;
+  whatsappPhone?: string;
+  whatsappOptIn?: boolean;
+  whatsappStudyReminders?: boolean;
+  whatsappDeadlineReminders?: boolean;
   subjects: OnboardingSubjectInput[];
 };
 
@@ -65,6 +73,10 @@ export async function getLearnerProfile(supabase: SupabaseClient, userId: string
       career_interests,
       preferred_study_times,
       exam_date,
+      whatsapp_phone,
+      whatsapp_opt_in,
+      whatsapp_study_reminders,
+      whatsapp_deadline_reminders,
       learner_subjects (
         id,
         current_mark,
@@ -101,7 +113,11 @@ export async function saveLearnerProfile(supabase: SupabaseClient, user: User, i
         internet_access_level: input.internetAccessLevel,
         career_interests: input.careerInterests,
         preferred_study_times: input.preferredStudyTimes,
-        exam_date: input.examDate || null
+        exam_date: input.examDate || null,
+        whatsapp_phone: input.whatsappPhone?.trim() || null,
+        whatsapp_opt_in: Boolean(input.whatsappOptIn && input.whatsappPhone),
+        whatsapp_study_reminders: Boolean(input.whatsappOptIn && input.whatsappStudyReminders && input.whatsappPhone),
+        whatsapp_deadline_reminders: Boolean(input.whatsappOptIn && input.whatsappDeadlineReminders && input.whatsappPhone)
       },
       { onConflict: "user_id" }
     )
@@ -162,6 +178,10 @@ export function buildDemoProfileFromInput(input: OnboardingProfileInput): Learne
     careerInterests: input.careerInterests,
     preferredStudyTimes: input.preferredStudyTimes,
     examDate: input.examDate || demoProfile.examDate,
+    whatsappPhone: input.whatsappPhone || demoProfile.whatsappPhone,
+    whatsappOptIn: Boolean(input.whatsappOptIn && input.whatsappPhone),
+    whatsappStudyReminders: Boolean(input.whatsappOptIn && input.whatsappStudyReminders && input.whatsappPhone),
+    whatsappDeadlineReminders: Boolean(input.whatsappOptIn && input.whatsappDeadlineReminders && input.whatsappPhone),
     subjects: input.subjects.map((subject, index) => ({
       id: `demo-${index}`,
       name: subject.name,
@@ -197,6 +217,10 @@ function mapProfileRow(row: LearnerProfileRow): LearnerProfile {
     careerInterests: row.career_interests ?? [],
     preferredStudyTimes: row.preferred_study_times ?? [],
     examDate: row.exam_date ?? demoProfile.examDate,
+    whatsappPhone: row.whatsapp_phone ?? "",
+    whatsappOptIn: Boolean(row.whatsapp_opt_in),
+    whatsappStudyReminders: Boolean(row.whatsapp_study_reminders),
+    whatsappDeadlineReminders: Boolean(row.whatsapp_deadline_reminders),
     subjects
   };
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, CalendarDays, CheckCircle2, ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { Badge, Card, PageHeader, ProgressBar } from "@/components/ui";
+import { Badge, Card, PageHeader, ProgressBar, StatCard } from "@/components/ui";
 import { calculateAps, calculateAverage, subjectRisk } from "@/lib/aps";
 import { matchBursaries } from "@/lib/bursaries";
 import { loadApsRules, loadBursaries, loadPastPaperQuestions } from "@/lib/content-data";
@@ -22,7 +22,9 @@ export default function DashboardPage() {
   const [questions, setQuestions] = useState<PastPaperQuestion[]>(sampleQuestions);
   const [plan, setPlan] = useState<StudyTask[]>([]);
   const [planMessage, setPlanMessage] = useState("");
-  const bursaryMatches = matchBursaries(profile, bursaries).slice(0, 3);
+  const allBursaryMatches = matchBursaries(profile, bursaries);
+  const bursaryMatches = allBursaryMatches.slice(0, 3);
+  const completedTasks = plan.filter((t) => t.completed).length;
   const selectedRule = apsRules[0] ?? sampleApsRules[0];
   const aps = calculateAps(profile.subjects, selectedRule);
   const average = calculateAverage(profile.subjects);
@@ -67,6 +69,22 @@ export default function DashboardPage() {
       </PageHeader>
       {isLoading ? <Card className="mb-4">Loading learner profile...</Card> : null}
       {error ? <Card className="mb-4 border-protea/20 bg-protea/10">{error}</Card> : null}
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="APS Estimate" value={String(aps)} sub="NSC point estimate" />
+        <StatCard
+          label="Average"
+          value={`${average}%`}
+          sub="across all subjects"
+          tone={average >= 60 ? "safe" : average >= 50 ? "watch" : "neutral"}
+        />
+        <StatCard
+          label="Weekly plan"
+          value={plan.length ? `${completedTasks}/${plan.length}` : "—"}
+          sub="tasks complete"
+          tone={plan.length > 0 && completedTasks === plan.length ? "safe" : "neutral"}
+        />
+        <StatCard label="Bursary matches" value={String(allBursaryMatches.length)} sub="open bursaries" />
+      </div>
       <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <Card>
           <div className="flex items-center justify-between gap-3">

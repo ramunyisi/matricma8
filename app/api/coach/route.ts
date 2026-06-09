@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { explainTopic, generatePracticeExplanation, generateRelatedPracticeQuestion, generateStudyPlan } from "@/lib/ai";
+import { explainTopic, generatePracticeExplanation, generateRelatedPracticeQuestion, generateStudyPlan, streamCoachResponse } from "@/lib/ai";
 import { demoProfile } from "@/lib/sample-data";
 
+const messageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1) });
+
 const requestSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("stream"),
+    messages: z.array(messageSchema).min(1),
+    profile: z.any().optional(),
+    focusSubject: z.string().optional()
+  }),
   z.object({
     type: z.literal("explain"),
     subject: z.string().min(1),
@@ -32,6 +40,25 @@ const requestSchema = z.discriminatedUnion("type", [
 export async function POST(request: Request) {
   try {
     const body = requestSchema.parse(await request.json());
+
+    if (body.type === "stream") {
+      const encoder = new TextEncoder();
+      const generator = streamCoachResponse(body.messages, body.profile ?? null, undefined, "web", body.focusSubject);
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of generator) {
+              controller.enqueue(encoder.encode(chunk));
+            }
+          } finally {
+            controller.close();
+          }
+        }
+      });
+      return new Response(stream, {
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" }
+      });
+    }
 
     if (body.type === "plan") {
       const profile = body.profile ?? demoProfile;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Search as SearchIcon, SlidersHorizontal, Bookmark, BellRing, BookmarkCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
@@ -64,12 +64,16 @@ export default function BursariesPage() {
   const [reminders, setReminders] = useState<Record<string, number>>({});
   const [reminderDrafts, setReminderDrafts] = useState<Record<string, number>>({});
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isServerReminderSyncEnabled, setIsServerReminderSyncEnabled] = useState(false);
+  const [hasLoadedInitialReminderState, setHasLoadedInitialReminderState] = useState(false);
+  const lastSyncedSnapshot = useRef("");
 
   useEffect(() => {
     loadBursaries(getSupabaseBrowserClient()).then(setBursaries);
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
     setIsHydrated(true);
     if (typeof window === "undefined") return;
     try {
@@ -80,6 +84,23 @@ export default function BursariesPage() {
     } catch {
       // Ignore invalid local storage values.
     }
+
+    loadServerReminderState()
+      .then((result) => {
+        if (!isMounted || !result) return;
+        setIsServerReminderSyncEnabled(true);
+        if (result.shortlist.length > 0 || Object.keys(result.reminders).length > 0) {
+          setShortlist(result.shortlist);
+          setReminders(result.reminders);
+        }
+      })
+      .finally(() => {
+        if (isMounted) setHasLoadedInitialReminderState(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -91,6 +112,26 @@ export default function BursariesPage() {
     if (!isHydrated || typeof window === "undefined") return;
     window.localStorage.setItem(storageKeys.reminders, JSON.stringify(reminders));
   }, [isHydrated, reminders]);
+
+  useEffect(() => {
+    if (!hasLoadedInitialReminderState || !isServerReminderSyncEnabled) return;
+    const snapshot = JSON.stringify({ shortlist, reminders });
+    if (snapshot === lastSyncedSnapshot.current) return;
+
+    const timer = window.setTimeout(() => {
+      syncReminderState(shortlist, reminders)
+        .then((synced) => {
+          if (synced) {
+            lastSyncedSnapshot.current = snapshot;
+          }
+        })
+        .catch(() => {
+          // Keep the local state usable even if server sync fails.
+        });
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [hasLoadedInitialReminderState, isServerReminderSyncEnabled, reminders, shortlist]);
 
   const filtered = useMemo(() => {
     const today = new Date();
@@ -485,4 +526,48 @@ function matchesFieldOfStudy(value: string, filter: string) {
   const lowerFilter = filter.toLowerCase();
   if (lowerValue.includes(lowerFilter) || lowerFilter.includes(lowerValue)) return true;
   return value.split("/").map((part) => part.trim().toLowerCase()).some((part) => part === lowerFilter || part.includes(lowerFilter));
+}
+
+async function loadServerReminderState() {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return null;
+
+  const response = await fetch("/api/bursary-reminders", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) return null;
+
+  const result = await response.json();
+  const rows: Array<{ bursary_id: string; saved?: boolean; send_whatsapp?: boolean; days_before_deadline?: number }> = Array.isArray(result.data) ? result.data : [];
+  const shortlist = rows.filter((row) => Boolean(row.saved)).map((row) => row.bursary_id);
+  const reminders = Object.fromEntries(rows.filter((row) => Boolean(row.send_whatsapp) && row.days_before_deadline).map((row) => [row.bursary_id, Number(row.days_before_deadline)]));
+  return { shortlist, reminders };
+}
+
+async function syncReminderState(shortlist: string[], reminders: Record<string, number>) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return false;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return false;
+
+  const response = await fetch("/api/bursary-reminders", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ shortlist, reminders })
+  });
+
+  if (!response.ok) {
+    return false;
+  }
+
+  return true;
 }

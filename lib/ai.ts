@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { Bursary, LearnerProfile, LearnerSubject, PastPaperQuestion } from "@/lib/types";
+
+export type ConversationMessage = { role: "user" | "assistant"; content: string };
 import { matchBursaries } from "@/lib/bursaries";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { predictRisk as localPredictRisk } from "@/lib/aps";
@@ -78,6 +80,61 @@ export async function generateRelatedPracticeQuestion(questionMetadata: PastPape
     { questionMetadata },
     fallback
   );
+}
+
+export async function* streamCoachResponse(
+  messages: ConversationMessage[],
+  profile: LearnerProfile | null,
+  grounding?: AiGroundingContext,
+  mode: "web" | "whatsapp" = "web",
+  focusSubject?: string
+): AsyncGenerator<string> {
+  if (!geminiApiKey) {
+    yield "AI coaching is not configured. Set GEMINI_API_KEY in your environment.";
+    return;
+  }
+
+  const client = new GoogleGenAI({ apiKey: geminiApiKey });
+
+  const whatsappNote =
+    mode === "whatsapp"
+      ? "\n\nFor WhatsApp: keep responses under 400 words. Use plain text. Use *bold* for key terms only."
+      : "";
+
+  let contextPrefix = systemRules + whatsappNote + "\n\n";
+  if (profile) {
+    const subjectList = profile.subjects.map((s) => `${s.name}: ${s.currentMark}%/${s.targetMark}%`).join(", ");
+    contextPrefix += `Learner: Grade ${profile.grade}, Province ${profile.province}, Subjects — ${subjectList}.\n\n`;
+  }
+  if (focusSubject) {
+    contextPrefix += `The learner is currently focusing on ${focusSubject}. Prioritise explanations for this subject unless they ask about something else.\n\n`;
+  }
+  if (grounding) {
+    contextPrefix += `Reference data: ${JSON.stringify(grounding)}\n\n`;
+  }
+
+  const contents = messages.map((msg, index) => ({
+    role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
+    parts: [{ text: index === 0 ? contextPrefix + msg.content : msg.content }]
+  }));
+
+  try {
+    const stream = await client.models.generateContentStream({
+      model: geminiModel,
+      contents,
+      config: { temperature: 0.4 }
+    });
+
+    for await (const chunk of stream) {
+      const text = chunk.text;
+      if (text) yield text;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    yield mode === "whatsapp"
+      ? "Sorry, I'm having trouble right now. Please try again in a moment."
+      : `\n\n*Coach unavailable: ${message}. Please try again.*`;
+  }
 }
 
 export function recommendBursaries(profile: LearnerProfile, bursaries: Bursary[]) {
