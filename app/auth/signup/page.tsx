@@ -15,6 +15,7 @@ export default function SignupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const router = useRouter();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,7 +31,10 @@ export default function SignupPage() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password: String(form.get("password")),
-        options: { data: { role: form.get("role") } }
+        options: {
+          data: { role: form.get("role") },
+          emailRedirectTo: `${appUrl}/auth/login`
+        }
       });
       if (error) {
         setMessage(friendlyError(error));
@@ -55,7 +59,11 @@ export default function SignupPage() {
     try {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) throw new Error("Supabase is not configured.");
-      const { error } = await supabase.auth.resend({ type: "signup", email: pendingEmail });
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: pendingEmail,
+        options: { emailRedirectTo: `${appUrl}/auth/login` }
+      });
       if (error) throw error;
       setMessage("Confirmation email resent. Check your inbox and spam folder.");
     } catch (error) {
