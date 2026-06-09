@@ -15,6 +15,8 @@ export async function loadApsRules(supabase: SupabaseClient | null): Promise<Aps
     minimumSubjectRequirementsJson: row.minimum_subject_requirements_json ?? [],
     sourceUrl: row.source_url,
     lastVerifiedAt: row.last_verified_at ?? "",
+    prospectusUrl: row.prospectus_url ?? undefined,
+    prospectusNotes: row.prospectus_notes ?? [],
     sampleData: Boolean(row.rule_json?.sampleData)
   }));
 }

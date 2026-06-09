@@ -126,6 +126,45 @@ export default function AdminPage() {
     }
   }
 
+  async function submitBulkImport(form: FormData) {
+    setIsSaving(true);
+    setMessage("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Login required.");
+
+      const type = value(form, "bulkType");
+      const raw = value(form, "bulkPayload");
+      if (!raw) throw new Error("Paste the bulk payload first.");
+
+      const payload = parseBulkPayload(type, raw);
+      const response = await fetch("/api/admin/bulk-import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Bulk import failed.");
+
+      if (type === "paperDirectories") {
+        setMessage(`Synced ${result.data.summaries.length} paper directory source(s).`);
+      } else {
+        setMessage(`Imported ${result.data.count} ${type}.`);
+      }
+      await refreshOptions();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not complete bulk import.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <AppShell>
       <PageHeader title="Teacher/Admin Portal" eyebrow="Verified content operations">
@@ -138,6 +177,14 @@ export default function AdminPage() {
           <Input name="grades" label="Grades" defaultValue="12" />
           <div className="rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/65 sm:col-span-2">
             Pulls DBE year/session pages into our searchable paper library while keeping downloads linked to DBE. Use comma-separated grades, for example 10,11.
+          </div>
+        </AdminForm>
+
+        <AdminForm title="Bulk import content" icon={<RefreshCw />} badge="bulk import" disabled={isSaving} onSubmit={submitBulkImport}>
+          <Select name="bulkType" label="Import type" options={["apsRules", "bursaries", "paperDirectories"]} defaultValue="apsRules" />
+          <Textarea name="bulkPayload" label="Payload" defaultValue={bulkExample("apsRules")} />
+          <div className="rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/65 sm:col-span-2">
+            Paste JSON arrays for APS rules or bursaries. For paper directories, paste one DBE directory URL per line or a JSON array of objects with `directoryUrl`, `maxCollections`, and optional `grades`.
           </div>
         </AdminForm>
 
@@ -316,6 +363,10 @@ function FileInput({ label, name }: { label: string; name: string }) {
   return <label className="text-sm font-bold">{label}<input className="input" name={name} type="file" accept="application/pdf,.pdf" required /></label>;
 }
 
+function Textarea({ label, name, defaultValue }: { label: string; name: string; defaultValue?: string }) {
+  return <label className="text-sm font-bold sm:col-span-2">{label}<textarea className="input min-h-44" name={name} defaultValue={defaultValue} /></label>;
+}
+
 function Select({ label, name, options, defaultValue }: { label: string; name: string; options: string[]; defaultValue?: string }) {
   return <label className="text-sm font-bold">{label}<select className="input" name={name} defaultValue={defaultValue}>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
 }
@@ -349,4 +400,70 @@ function subjectRequirements(input: string) {
     const [subject, minMark] = item.split(":").map((part) => part.trim());
     return subject && Number.isFinite(Number(minMark)) ? { subject, minMark: Number(minMark) } : null;
   }).filter((item): item is { subject: string; minMark: number } => Boolean(item));
+}
+
+function parseBulkPayload(type: string, raw: string) {
+  if (type === "paperDirectories") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return { type, items: parsed };
+      }
+    } catch {
+      return {
+        type,
+        items: raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((directoryUrl) => ({ directoryUrl }))
+      };
+    }
+    throw new Error("Paper directories need either JSON array input or one URL per line.");
+  }
+
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error("Paste a JSON array.");
+  return { type, items: parsed };
+}
+
+function bulkExample(type: string) {
+  if (type === "bursaries") {
+    return JSON.stringify([
+      {
+        name: "Example Bursary",
+        provider: "Example Provider",
+        fieldOfStudy: "Engineering",
+        fundingType: "bursary",
+        studyLevels: ["undergraduate"],
+        eligibilityCriteriaJson: ["South African citizen"],
+        minAverage: 65,
+        minSubjectRequirementsJson: [{ subject: "Mathematics", minMark: 60 }],
+        provinceRequirements: ["All provinces"],
+        citizenshipRequirements: "South African citizen",
+        deadline: "2026-09-30",
+        officialStatus: "open",
+        applicationUrl: "https://example.org/apply",
+        requiredDocumentsJson: ["ID document", "School report"],
+        sourceUrl: "https://example.org/source",
+        lastVerifiedAt: "2026-06-09",
+        applicationWindow: "Open until 30 September 2026.",
+        summary: "Example bursary for bulk import.",
+        notes: "Replace with real provider data."
+      }
+    ], null, 2);
+  }
+
+  if (type === "paperDirectories") {
+    return "https://www.education.gov.za/Curriculum/NationalSeniorCertificate(NSC)Examinations.aspx";
+  }
+
+  return JSON.stringify([
+    {
+      institutionName: "Example University",
+      programmeName: "Example Programme",
+      minimumTotal: 30,
+      minimumSubjectRequirementsJson: [{ subject: "Mathematics", minMark: 50 }],
+      sourceUrl: "https://example.edu/admissions",
+      lastVerifiedAt: "2026-06-09",
+      prospectusUrl: "https://example.edu/prospectus.pdf",
+      prospectusNotes: ["Example prospectus note."]
+    }
+  ], null, 2);
 }

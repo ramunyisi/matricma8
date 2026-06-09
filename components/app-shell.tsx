@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { BookOpen, Bot, Building2, Calculator, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle } from "lucide-react";
+import { BookOpen, Bot, Building2, Calculator, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route } from "lucide-react";
 import { getLearnerProfile } from "@/lib/learner-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import type { Role } from "@/lib/types";
@@ -18,6 +18,7 @@ const navItems = [
   { href: "/past-papers", label: "Past Papers", icon: BookOpen },
   { href: "/universities", label: "Universities", icon: Building2 },
   { href: "/bursaries", label: "Bursaries", icon: Search },
+  { href: "/pathways", label: "Pathways", icon: Route },
   { href: "/profile", label: "Profile", icon: UserCircle },
   { href: "/admin", label: "Admin", icon: ShieldCheck }
 ];

@@ -25,7 +25,19 @@ export const universities: UniversityDirectoryItem[] = [
     type: "University of technology",
     websiteUrl: "https://www.cput.ac.za",
     applicationUrl: "https://www.cput.ac.za/study/apply",
-    apsInfoUrl: "https://www.cput.ac.za/study/apply"
+    apsInfoUrl: "https://www.cput.ac.za/study-at-cput/undergraduate/prospectus",
+    prospectusUrl: "https://www.cput.ac.za/study-at-cput/undergraduate/prospectus",
+    prospectusHighlights: [
+      "2027 applications open on 11 May 2026.",
+      "Most undergraduate certificate and diploma applications close on 30 September 2026 for South African applicants and 31 August 2026 for non-South African applicants.",
+      "Exceptions include Dental Assisting and Emergency Medical Care, which close earlier.",
+      "The prospectus and qualification pages advise learners to check subject and mark requirements before applying.",
+      "Full acceptance depends on final Grade 12 results."
+    ],
+    prospectusNotes: [
+      "CPUT offers a career-focused university of technology pathway with more than 70 programmes.",
+      "Some health and design qualifications have programme-specific APS and subject requirements that are higher than the general application guidance."
+    ]
   },
   {
     name: "Central University of Technology",
@@ -202,8 +214,22 @@ export const universities: UniversityDirectoryItem[] = [
     type: "Comprehensive university",
     websiteUrl: "https://www.uj.ac.za",
     applicationUrl: "https://www.uj.ac.za/admission-aid/undergraduate/",
-    apsInfoUrl: "https://www.uj.ac.za/admission-aid/undergraduate/important-information-before-you-apply/",
-    apsCalculatorUrl: "https://www.uj.ac.za/admission-aid/undergraduate/important-information-before-you-apply/"
+    apsInfoUrl: "https://www.uj.ac.za/admission-aid/undergraduate/",
+    apsCalculatorUrl: "https://www.uj.ac.za/admission-aid/undergraduate/important-information-before-you-apply/",
+    prospectusUrl: "https://www.uj.ac.za/wp-content/uploads/2026/04/uj_undergrad_prospectus2027.pdf",
+    prospectusHighlights: [
+      "UJ offers at least 178 undergraduate programmes across eight faculties and one college.",
+      "Provisional admission is based on final Grade 11 results for current matric learners, with final admission based on final Grade 12 results.",
+      "UJ ranks applicants from highest to lowest APS when making final selections.",
+      "Subjects used to calculate APS must include the required programme subjects.",
+      "The undergraduate pages include an APS calculator and faculty-specific entry rules."
+    ],
+    prospectusNotes: [
+      "UJ warns applicants not to trust third parties promising admission in return for payment.",
+      "Applicants currently upgrading Grade 12 results must declare that during the application process."
+    ],
+    contactEmail: "mylife@uj.ac.za",
+    contactPhone: "+27 11 559 4555"
   },
   {
     name: "University of KwaZulu-Natal",
@@ -312,7 +338,21 @@ export const universities: UniversityDirectoryItem[] = [
     type: "Comprehensive university",
     websiteUrl: "https://www.univen.ac.za",
     applicationUrl: "https://www.univen.ac.za/students/how-to-apply/",
-    apsInfoUrl: "https://www.univen.ac.za/students/how-to-apply/"
+    apsInfoUrl: "https://www.univen.ac.za/students/student-support-services/how-to-apply/general-information/",
+    prospectusUrl: "https://www.univen.ac.za/wp-content/uploads/2026/03/2027-Univen-Undergraduate-Prospectus.pdf",
+    prospectusHighlights: [
+      "UNIVEN says the undergraduate prospectus is a guide for school leavers and others seeking a first degree.",
+      "The university minimum for bachelor-degree study is APS 26, excluding Life Orientation, with at least four recognized NSC 20-credit subjects at rating 4 or above.",
+      "All programmes are offered full-time.",
+      "The School of Management Sciences says bachelor-degree applicants should meet APS 32 with English at level 4, and extended programmes may consider APS 28-31.",
+      "The Department of Business Information Systems lists BCom in Business Information Systems at APS 32 or above and gives priority to scores above 32."
+    ],
+    prospectusNotes: [
+      "UNIVEN provides faculty contact people for the 2027 prospectus, including management, science, and health sciences enquiries.",
+      "The university notes that meeting minimum requirements does not guarantee admission and may require a selection or entrance test."
+    ],
+    contactEmail: "undergraduateadmission1@univen.ac.za",
+    contactPhone: "+27 15 962 8959"
   },
   {
     name: "Vaal University of Technology",

@@ -70,7 +70,7 @@ export function evaluateApsRule(subjects: LearnerSubject[], rule: ApsRule): ApsP
   const calculatedScore = calculateAps(subjects, rule);
   const explanation: string[] = [];
   const missing = rule.minimumSubjectRequirementsJson.filter((requirement) => {
-    const subject = subjects.find((item) => item.name === requirement.subject);
+    const subject = findMatchingSubject(subjects, requirement.subject);
     return !subject || estimateFinalMark(subject.currentMark, subject.targetMark) < requirement.minMark;
   });
 
@@ -106,4 +106,29 @@ export function evaluateApsRule(subjects: LearnerSubject[], rule: ApsRule): ApsP
     eligibilityStatus: "Likely qualifies",
     explanation: [...explanation, "This only reflects stored sample rules. Confirm against official admission pages."]
   };
+}
+
+export function findMatchingSubject(subjects: LearnerSubject[], requirement: string) {
+  const options = requirement
+    .split(/\s*(?:\/|\bor\b)\s*/i)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (options.length === 0) {
+    options.push(requirement);
+  }
+
+  const normalisedOptions = options.map(normaliseSubject);
+  return (
+    subjects.find((item) =>
+      normalisedOptions.some((option) => {
+        const subjectName = normaliseSubject(item.name);
+        return subjectName === option || subjectName.endsWith(` ${option}`);
+      })
+    ) ?? null
+  );
+}
+
+function normaliseSubject(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }

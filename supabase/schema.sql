@@ -137,6 +137,8 @@ create table public.aps_rules (
   minimum_subject_requirements_json jsonb not null default '[]'::jsonb,
   source_url text not null,
   last_verified_at date,
+  prospectus_url text,
+  prospectus_notes jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   unique (institution_name, programme_name)
 );

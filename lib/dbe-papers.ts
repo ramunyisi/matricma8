@@ -37,9 +37,13 @@ export type DbeSyncSummary = {
   skippedCollections: string[];
 };
 
-export async function syncDbePastPaperDirectory(admin: SupabaseClient, options: { maxCollections?: number; grades?: number[] } = {}): Promise<DbeSyncSummary> {
-  const directoryHtml = await fetchText(DBE_DIRECTORY_URL);
-  const collections = parseDirectoryCollections(directoryHtml);
+export async function syncDbePastPaperDirectory(
+  admin: SupabaseClient,
+  options: { directoryUrl?: string; maxCollections?: number; grades?: number[] } = {}
+): Promise<DbeSyncSummary> {
+  const directoryUrl = options.directoryUrl ?? DBE_DIRECTORY_URL;
+  const directoryHtml = await fetchText(directoryUrl);
+  const collections = parseDirectoryCollectionsFromUrl(directoryHtml, directoryUrl);
   const filteredCollections = options.grades?.length
     ? collections.filter((collection) => options.grades?.includes(gradeFromScope(collection.gradeScope)))
     : collections;
@@ -73,6 +77,10 @@ export async function syncDbePastPaperDirectory(admin: SupabaseClient, options: 
 }
 
 export function parseDirectoryCollections(html: string): DirectoryCollection[] {
+  return parseDirectoryCollectionsFromUrl(html, DBE_DIRECTORY_URL);
+}
+
+export function parseDirectoryCollectionsFromUrl(html: string, directoryUrl: string): DirectoryCollection[] {
   const section = between(html, /Previous exam papers \(Gr 10, 11 &amp; 12\)|Previous exam papers \(Gr 10, 11 & 12\)/i, /Contacts for enquiries/i) ?? html;
   return extractAnchors(section)
     .map((anchor) => {
@@ -81,7 +89,7 @@ export function parseDirectoryCollections(html: string): DirectoryCollection[] {
       if (!year || !/exam|paper|exemplar|common/i.test(title)) return null;
       return {
         title,
-        sourceUrl: absoluteUrl(anchor.href, DBE_DIRECTORY_URL),
+        sourceUrl: absoluteUrl(anchor.href, directoryUrl),
         year,
         examSession: examSessionFromTitle(title),
         gradeScope: gradeScopeFromTitle(title)

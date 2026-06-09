@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateAps, evaluateApsRule, nscLevel, simulateWhatIf, subjectRisk } from "@/lib/aps";
+import { calculateAps, evaluateApsRule, findMatchingSubject, nscLevel, simulateWhatIf, subjectRisk } from "@/lib/aps";
 import { matchProgrammes } from "@/lib/programme-matches";
 import { programmeRules } from "@/lib/programme-rules";
 import { demoProfile, sampleApsRules } from "@/lib/sample-data";
@@ -33,6 +33,14 @@ describe("APS calculation", () => {
     expect(subjectRisk(72, 78)).toBe("Safe");
     expect(subjectRisk(52, 64)).toBe("Watch");
     expect(subjectRisk(38, 55)).toBe("At Risk");
+  });
+
+  it("matches language subject aliases for prospectus rules", () => {
+    const subject = findMatchingSubject(
+      [{ id: "zul", name: "isiZulu Home Language", grade: 12, currentMark: 68, targetMark: 72 }],
+      "Home Language"
+    );
+    expect(subject?.name).toBe("isiZulu Home Language");
   });
 
   it("ranks university programme matches by qualification status", () => {

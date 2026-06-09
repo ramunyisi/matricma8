@@ -69,7 +69,9 @@ const requestSchema = z.discriminatedUnion("type", [
     minimumTotal: z.number().int().min(0).optional(),
     minimumSubjectRequirementsJson: z.array(z.object({ subject: z.string(), minMark: z.number() })).default([]),
     sourceUrl: z.string().url(),
-    lastVerifiedAt: z.string().optional()
+    lastVerifiedAt: z.string().optional(),
+    prospectusUrl: z.string().url().optional(),
+    prospectusNotes: z.array(z.string()).default([])
   })
 ]);
 
@@ -146,7 +148,9 @@ async function insertAdminRecord(admin: SupabaseClient, body: z.infer<typeof req
         rule_json: { method: "nsc_levels", includeLifeOrientation: false, minimumTotal: body.minimumTotal },
         minimum_subject_requirements_json: body.minimumSubjectRequirementsJson,
         source_url: body.sourceUrl,
-        last_verified_at: body.lastVerifiedAt
+        last_verified_at: body.lastVerifiedAt,
+        prospectus_url: body.prospectusUrl,
+        prospectus_notes: body.prospectusNotes ?? []
       }, { onConflict: "institution_name,programme_name" }).select().single();
   }
 }

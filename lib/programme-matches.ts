@@ -1,4 +1,4 @@
-import { calculateAps, evaluateApsRule, estimateFinalMark } from "@/lib/aps";
+import { calculateAps, evaluateApsRule, estimateFinalMark, findMatchingSubject } from "@/lib/aps";
 import type { ApsPrediction, ApsRule, LearnerSubject } from "@/lib/types";
 
 export type ProgrammeMatch = {
@@ -19,7 +19,7 @@ export function matchProgrammes(subjects: LearnerSubject[], rules: ApsRule[]): P
       const belowMinimumSubjects: string[] = [];
 
       for (const requirement of rule.minimumSubjectRequirementsJson) {
-        const subject = subjects.find((item) => normaliseSubject(item.name) === normaliseSubject(requirement.subject));
+        const subject = findMatchingSubject(subjects, requirement.subject);
         if (!subject) {
           missingSubjects.push(requirement.subject);
         } else if (estimateFinalMark(subject.currentMark, subject.targetMark) < requirement.minMark) {
@@ -36,10 +36,6 @@ export function matchProgrammes(subjects: LearnerSubject[], rules: ApsRule[]): P
       };
     })
     .sort((a, b) => statusRank(a.prediction.eligibilityStatus) - statusRank(b.prediction.eligibilityStatus) || b.apsGap - a.apsGap);
-}
-
-function normaliseSubject(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function statusRank(status: ApsPrediction["eligibilityStatus"]) {
