@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { BookOpen, Bot, Building2, Calculator, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route } from "lucide-react";
+import { BookOpen, Bot, Building2, Calculator, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route, X } from "lucide-react";
 import { getLearnerProfile } from "@/lib/learner-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
   const [needsLearnerProfile, setNeedsLearnerProfile] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -96,6 +97,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [pathname, router]);
 
+  // Close drawer on navigation
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+
   async function logout() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
@@ -116,7 +120,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Image src={matricLogo} alt="MatricSA logo" width={36} height={36} className="h-9 w-9 rounded-lg object-contain" />
             <span>MatricSA</span>
           </Link>
-          <button className="focus-ring rounded-lg border border-ink/10 p-2 md:hidden" aria-label="Open navigation">
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="focus-ring rounded-lg border border-ink/10 p-2 md:hidden"
+            aria-label="Open navigation"
+          >
             <Menu size={20} />
           </button>
           <nav className="hidden items-center gap-0.5 md:flex">
@@ -153,7 +161,54 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-5 md:py-8">
+      {/* Mobile drawer */}
+      {menuOpen ? (
+        <div className="fixed inset-0 z-50 md:hidden" aria-modal="true">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
+          {/* Panel */}
+          <div className="absolute inset-y-0 right-0 flex w-72 flex-col bg-white shadow-elevated">
+            <div className="flex items-center justify-between border-b border-ink/[.07] px-4 py-3">
+              <span className="font-black text-ink">Menu</span>
+              <button onClick={() => setMenuOpen(false)} className="focus-ring rounded-lg p-2 text-ink/50 hover:text-ink" aria-label="Close menu">
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-3 py-3">
+              {visibleNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors",
+                      isActive ? "bg-veld/[.08] text-veld" : "text-ink/65 hover:bg-chalk hover:text-ink"
+                    )}
+                  >
+                    <Icon size={18} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+            {user ? (
+              <div className="border-t border-ink/[.07] p-3">
+                <button
+                  onClick={() => { setMenuOpen(false); logout(); }}
+                  className="flex w-full items-center gap-3 rounded-xl bg-ink px-4 py-3 text-sm font-black text-white"
+                >
+                  <LogOut size={18} />
+                  Logout
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <main className="mx-auto max-w-7xl px-4 py-5 pb-24 md:py-8 md:pb-8">
         {isCheckingAuth ? (
           <div className="grid min-h-[55vh] place-items-center">
             <div className="rounded-xl border border-ink/[.07] bg-white p-6 text-center shadow-card">
