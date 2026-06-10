@@ -26,6 +26,14 @@ create table public.learner_profiles (
   whatsapp_opt_in boolean not null default false,
   whatsapp_study_reminders boolean not null default false,
   whatsapp_deadline_reminders boolean not null default false,
+  reminder_email text,
+  fallback_email_enabled boolean not null default false,
+  reminder_timezone text not null default 'Africa/Johannesburg',
+  reminder_paused_until date,
+  study_reminder_hour int not null default 18 check (study_reminder_hour between 0 and 23),
+  deadline_reminder_hour int not null default 10 check (deadline_reminder_hour between 0 and 23),
+  quiet_hours_start int not null default 20 check (quiet_hours_start between 0 and 23),
+  quiet_hours_end int not null default 6 check (quiet_hours_end between 0 and 23),
   whatsapp_last_study_reminder_at date,
   whatsapp_last_deadline_reminder_at date,
   created_at timestamptz not null default now(),
@@ -66,6 +74,25 @@ create table public.study_tasks (
   task_type text not null,
   due_date date,
   completed boolean not null default false
+);
+
+create table public.coach_topic_memory (
+  id uuid primary key default gen_random_uuid(),
+  learner_id uuid not null references public.learner_profiles(id) on delete cascade,
+  subject_name text not null,
+  topic_key text not null,
+  topic_label text not null,
+  session_count int not null default 1,
+  question_count int not null default 0,
+  struggle_count int not null default 0,
+  success_count int not null default 0,
+  last_mode text not null default 'chat',
+  last_summary text,
+  last_question text,
+  last_answer text,
+  last_seen_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (learner_id, topic_key)
 );
 
 create table public.marks (
@@ -213,17 +240,23 @@ create table public.notification_deliveries (
   id uuid primary key default gen_random_uuid(),
   learner_id uuid not null references public.learner_profiles(id) on delete cascade,
   channel text not null default 'whatsapp',
+  delivery_provider text not null default 'twilio',
+  recipient text not null,
   reminder_type text not null,
   reminder_key text not null,
   payload_json jsonb not null default '{}'::jsonb,
   sent_at timestamptz not null default now(),
+  last_attempt_at timestamptz not null default now(),
   status text not null default 'sent',
+  attempt_count int not null default 1,
+  error_message text,
   unique (learner_id, channel, reminder_type, reminder_key)
 );
 
 create index learner_profiles_user_id_idx on public.learner_profiles(user_id);
 create index learner_subjects_learner_id_idx on public.learner_subjects(learner_id);
 create index marks_learner_subject_idx on public.marks(learner_id, subject_id);
+create index coach_topic_memory_learner_idx on public.coach_topic_memory(learner_id, struggle_count desc, last_seen_at desc);
 create index past_papers_lookup_idx on public.past_papers(grade, subject_id, year, exam_session);
 create unique index past_papers_external_id_idx on public.past_papers(external_id) where external_id is not null;
 create index past_papers_search_idx on public.past_papers(year, exam_session, paper_number, language);
@@ -238,6 +271,7 @@ alter table public.learner_profiles enable row level security;
 alter table public.learner_subjects enable row level security;
 alter table public.study_plans enable row level security;
 alter table public.study_tasks enable row level security;
+alter table public.coach_topic_memory enable row level security;
 alter table public.marks enable row level security;
 alter table public.subjects enable row level security;
 alter table public.topics enable row level security;
@@ -286,6 +320,18 @@ create policy "own study plans" on public.study_plans for all using (
   exists (
     select 1 from public.learner_profiles lp
     where lp.id = study_plans.learner_id and lp.user_id = auth.uid()
+  )
+);
+
+create policy "own coach memory" on public.coach_topic_memory for all using (
+  exists (
+    select 1 from public.learner_profiles lp
+    where lp.id = coach_topic_memory.learner_id and lp.user_id = auth.uid()
+  )
+) with check (
+  exists (
+    select 1 from public.learner_profiles lp
+    where lp.id = coach_topic_memory.learner_id and lp.user_id = auth.uid()
   )
 );
 

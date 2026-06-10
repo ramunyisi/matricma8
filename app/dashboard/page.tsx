@@ -14,6 +14,7 @@ import { loadOrCreateStudyPlan, updateStudyTaskCompletion } from "@/lib/study-pl
 import type { ApsRule, Bursary, PastPaperQuestion, StudyTask } from "@/lib/types";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
 import { formatDate, friendlyError } from "@/lib/utils";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const { profile, isDemo, isLoading, error } = useLearnerProfile();
@@ -121,6 +122,20 @@ export default function DashboardPage() {
           <p className="mt-4 text-sm leading-6 text-ink/65">Using configurable rule: {selectedRule.programmeName}.</p>
         </Card>
       </div>
+      <Card className="mt-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black">Reminder schedule</h2>
+            <p className="text-sm text-ink/65">This is the next automated reminder window MatricSA will use.</p>
+          </div>
+          <Link href="/notifications" className="focus-ring rounded-lg border border-ink/10 px-3 py-2 text-sm font-black">Open settings</Link>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <Metric label="Study reminders" value={profile.whatsappStudyReminders ? `${padHour(profile.studyReminderHour ?? 18)}:00` : "Off"} />
+          <Metric label="Deadline reminders" value={profile.whatsappDeadlineReminders ? `${padHour(profile.deadlineReminderHour ?? 10)}:00` : "Off"} />
+          <Metric label="Quiet hours" value={`${padHour(profile.quietHoursStart ?? 20)}:00-${padHour(profile.quietHoursEnd ?? 6)}:00`} />
+        </div>
+      </Card>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card>
           <h2 className="flex items-center gap-2 text-xl font-black"><AlertTriangle className="text-protea" size={20} /> Subjects at risk</h2>
@@ -194,6 +209,10 @@ export default function DashboardPage() {
       </div>
     </AppShell>
   );
+}
+
+function padHour(hour: number) {
+  return String(hour).padStart(2, "0");
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

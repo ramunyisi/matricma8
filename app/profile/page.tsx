@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { Card, PageHeader, ProgressBar } from "@/components/ui";
 import { getCurrentUser, saveLearnerProfile } from "@/lib/learner-profile";
@@ -24,6 +25,14 @@ export default function ProfilePage() {
   const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [whatsappStudyReminders, setWhatsappStudyReminders] = useState(false);
   const [whatsappDeadlineReminders, setWhatsappDeadlineReminders] = useState(false);
+  const [reminderEmail, setReminderEmail] = useState("");
+  const [fallbackEmailEnabled, setFallbackEmailEnabled] = useState(false);
+  const [reminderTimezone, setReminderTimezone] = useState("Africa/Johannesburg");
+  const [reminderPausedUntil, setReminderPausedUntil] = useState("");
+  const [studyReminderHour, setStudyReminderHour] = useState(18);
+  const [deadlineReminderHour, setDeadlineReminderHour] = useState(10);
+  const [quietHoursStart, setQuietHoursStart] = useState(20);
+  const [quietHoursEnd, setQuietHoursEnd] = useState(6);
   const [careerInterests, setCareerInterests] = useState("");
   const [preferredStudyTimes, setPreferredStudyTimes] = useState("");
   const [pendingSubject, setPendingSubject] = useState(sampleSubjects[0]);
@@ -43,6 +52,14 @@ export default function ProfilePage() {
     setWhatsappOptIn(Boolean(profile.whatsappOptIn));
     setWhatsappStudyReminders(Boolean(profile.whatsappStudyReminders));
     setWhatsappDeadlineReminders(Boolean(profile.whatsappDeadlineReminders));
+    setReminderEmail(profile.reminderEmail ?? "");
+    setFallbackEmailEnabled(Boolean(profile.fallbackEmailEnabled));
+    setReminderTimezone(profile.reminderTimezone ?? "Africa/Johannesburg");
+    setReminderPausedUntil(profile.reminderPausedUntil ?? "");
+    setStudyReminderHour(profile.studyReminderHour ?? 18);
+    setDeadlineReminderHour(profile.deadlineReminderHour ?? 10);
+    setQuietHoursStart(profile.quietHoursStart ?? 20);
+    setQuietHoursEnd(profile.quietHoursEnd ?? 6);
     setCareerInterests(profile.careerInterests.join(", "));
     setPreferredStudyTimes(profile.preferredStudyTimes.join(", "));
     setMarks(Object.fromEntries(profile.subjects.map((subject) => [subject.name, { currentMark: subject.currentMark, targetMark: subject.targetMark }])));
@@ -74,6 +91,14 @@ export default function ProfilePage() {
         whatsappOptIn,
         whatsappStudyReminders,
         whatsappDeadlineReminders,
+        reminderEmail,
+        fallbackEmailEnabled,
+        reminderTimezone,
+        reminderPausedUntil,
+        studyReminderHour,
+        deadlineReminderHour,
+        quietHoursStart,
+        quietHoursEnd,
         careerInterests: splitList(careerInterests),
         preferredStudyTimes: splitList(preferredStudyTimes),
         subjects: subjectRows
@@ -124,6 +149,11 @@ export default function ProfilePage() {
                 Send deadline reminders
               </label>
             </div>
+          </div>
+          <div className="mt-4 rounded-lg border border-ink/10 p-4">
+            <p className="text-sm font-black">Reminder settings</p>
+            <p className="mt-1 text-xs leading-5 text-ink/60">Use the dedicated notifications page to manage time, quiet hours, email fallback, and pause/resume controls.</p>
+            <Link href="/notifications" className="mt-3 inline-flex rounded-lg bg-ink px-4 py-2 text-sm font-black text-white">Open reminder settings</Link>
           </div>
           <Field label="Career interests"><input value={careerInterests} onChange={(event) => setCareerInterests(event.target.value)} className="input" /></Field>
           <Field label="Preferred study times"><input value={preferredStudyTimes} onChange={(event) => setPreferredStudyTimes(event.target.value)} className="input" /></Field>

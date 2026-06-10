@@ -3,6 +3,14 @@ alter table public.learner_profiles
   add column if not exists whatsapp_opt_in boolean not null default false,
   add column if not exists whatsapp_study_reminders boolean not null default false,
   add column if not exists whatsapp_deadline_reminders boolean not null default false,
+  add column if not exists reminder_email text,
+  add column if not exists fallback_email_enabled boolean not null default false,
+  add column if not exists reminder_timezone text not null default 'Africa/Johannesburg',
+  add column if not exists reminder_paused_until date,
+  add column if not exists study_reminder_hour int not null default 18,
+  add column if not exists deadline_reminder_hour int not null default 10,
+  add column if not exists quiet_hours_start int not null default 20,
+  add column if not exists quiet_hours_end int not null default 6,
   add column if not exists whatsapp_last_study_reminder_at date,
   add column if not exists whatsapp_last_deadline_reminder_at date;
 
@@ -23,11 +31,16 @@ create table if not exists public.notification_deliveries (
   id uuid primary key default gen_random_uuid(),
   learner_id uuid not null references public.learner_profiles(id) on delete cascade,
   channel text not null default 'whatsapp',
+  delivery_provider text not null default 'twilio',
+  recipient text not null,
   reminder_type text not null,
   reminder_key text not null,
   payload_json jsonb not null default '{}'::jsonb,
   sent_at timestamptz not null default now(),
+  last_attempt_at timestamptz not null default now(),
   status text not null default 'sent',
+  attempt_count int not null default 1,
+  error_message text,
   unique (learner_id, channel, reminder_type, reminder_key)
 );
 

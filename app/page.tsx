@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BookOpen, Bot, Calculator, CheckCircle2, Search } from "lucide-react";
 import { Card } from "@/components/ui";
-import matricLogo from "../matriclogo.png";
+import matricLogo from "../matricsalogo.png";
 
 const features = [
   {
@@ -50,9 +50,8 @@ export default function LandingPage() {
 
         {/* Nav */}
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 text-white">
-          <Link href="/" className="flex items-center gap-2.5 text-lg font-black tracking-tight">
+          <Link href="/" className="flex items-center text-lg font-black tracking-tight">
             <Image src={matricLogo} alt="MatricSA logo" width={34} height={34} className="h-8 w-8 rounded-lg object-contain" />
-            <span>MatricSA</span>
           </Link>
           <div className="flex items-center gap-2">
             <Link

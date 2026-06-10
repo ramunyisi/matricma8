@@ -16,6 +16,14 @@ type LearnerProfileRow = {
   whatsapp_opt_in: boolean | null;
   whatsapp_study_reminders: boolean | null;
   whatsapp_deadline_reminders: boolean | null;
+  reminder_email: string | null;
+  fallback_email_enabled: boolean | null;
+  reminder_timezone: string | null;
+  reminder_paused_until: string | null;
+  study_reminder_hour: number | null;
+  deadline_reminder_hour: number | null;
+  quiet_hours_start: number | null;
+  quiet_hours_end: number | null;
   learner_subjects?: Array<{
     id: string;
     current_mark: number | string;
@@ -51,6 +59,14 @@ export type OnboardingProfileInput = {
   whatsappOptIn?: boolean;
   whatsappStudyReminders?: boolean;
   whatsappDeadlineReminders?: boolean;
+  reminderEmail?: string;
+  fallbackEmailEnabled?: boolean;
+  reminderTimezone?: string;
+  reminderPausedUntil?: string;
+  studyReminderHour?: number;
+  deadlineReminderHour?: number;
+  quietHoursStart?: number;
+  quietHoursEnd?: number;
   subjects: OnboardingSubjectInput[];
 };
 
@@ -77,6 +93,14 @@ export async function getLearnerProfile(supabase: SupabaseClient, userId: string
       whatsapp_opt_in,
       whatsapp_study_reminders,
       whatsapp_deadline_reminders,
+      reminder_email,
+      fallback_email_enabled,
+      reminder_timezone,
+      reminder_paused_until,
+      study_reminder_hour,
+      deadline_reminder_hour,
+      quiet_hours_start,
+      quiet_hours_end,
       learner_subjects (
         id,
         current_mark,
@@ -117,7 +141,15 @@ export async function saveLearnerProfile(supabase: SupabaseClient, user: User, i
         whatsapp_phone: input.whatsappPhone?.trim() || null,
         whatsapp_opt_in: Boolean(input.whatsappOptIn && input.whatsappPhone),
         whatsapp_study_reminders: Boolean(input.whatsappOptIn && input.whatsappStudyReminders && input.whatsappPhone),
-        whatsapp_deadline_reminders: Boolean(input.whatsappOptIn && input.whatsappDeadlineReminders && input.whatsappPhone)
+        whatsapp_deadline_reminders: Boolean(input.whatsappOptIn && input.whatsappDeadlineReminders && input.whatsappPhone),
+        reminder_email: input.reminderEmail?.trim() || null,
+        fallback_email_enabled: Boolean(input.fallbackEmailEnabled && input.reminderEmail),
+        reminder_timezone: input.reminderTimezone || "Africa/Johannesburg",
+        reminder_paused_until: input.reminderPausedUntil || null,
+        study_reminder_hour: input.studyReminderHour ?? 18,
+        deadline_reminder_hour: input.deadlineReminderHour ?? 10,
+        quiet_hours_start: input.quietHoursStart ?? 20,
+        quiet_hours_end: input.quietHoursEnd ?? 6
       },
       { onConflict: "user_id" }
     )
@@ -182,6 +214,14 @@ export function buildDemoProfileFromInput(input: OnboardingProfileInput): Learne
     whatsappOptIn: Boolean(input.whatsappOptIn && input.whatsappPhone),
     whatsappStudyReminders: Boolean(input.whatsappOptIn && input.whatsappStudyReminders && input.whatsappPhone),
     whatsappDeadlineReminders: Boolean(input.whatsappOptIn && input.whatsappDeadlineReminders && input.whatsappPhone),
+    reminderEmail: input.reminderEmail || demoProfile.reminderEmail,
+    fallbackEmailEnabled: Boolean(input.fallbackEmailEnabled && input.reminderEmail),
+    reminderTimezone: input.reminderTimezone || demoProfile.reminderTimezone,
+    reminderPausedUntil: input.reminderPausedUntil || demoProfile.reminderPausedUntil,
+    studyReminderHour: input.studyReminderHour ?? demoProfile.studyReminderHour,
+    deadlineReminderHour: input.deadlineReminderHour ?? demoProfile.deadlineReminderHour,
+    quietHoursStart: input.quietHoursStart ?? demoProfile.quietHoursStart,
+    quietHoursEnd: input.quietHoursEnd ?? demoProfile.quietHoursEnd,
     subjects: input.subjects.map((subject, index) => ({
       id: `demo-${index}`,
       name: subject.name,
@@ -221,8 +261,57 @@ function mapProfileRow(row: LearnerProfileRow): LearnerProfile {
     whatsappOptIn: Boolean(row.whatsapp_opt_in),
     whatsappStudyReminders: Boolean(row.whatsapp_study_reminders),
     whatsappDeadlineReminders: Boolean(row.whatsapp_deadline_reminders),
+    reminderEmail: row.reminder_email ?? "",
+    fallbackEmailEnabled: Boolean(row.fallback_email_enabled),
+    reminderTimezone: row.reminder_timezone ?? "Africa/Johannesburg",
+    reminderPausedUntil: row.reminder_paused_until ?? "",
+    studyReminderHour: row.study_reminder_hour ?? 18,
+    deadlineReminderHour: row.deadline_reminder_hour ?? 10,
+    quietHoursStart: row.quiet_hours_start ?? 20,
+    quietHoursEnd: row.quiet_hours_end ?? 6,
     subjects
   };
+}
+
+export async function saveReminderSettings(
+  supabase: SupabaseClient,
+  user: User,
+  input: {
+    whatsappPhone?: string;
+    whatsappOptIn?: boolean;
+    whatsappStudyReminders?: boolean;
+    whatsappDeadlineReminders?: boolean;
+    reminderEmail?: string;
+    fallbackEmailEnabled?: boolean;
+    reminderTimezone?: string;
+    reminderPausedUntil?: string;
+    studyReminderHour?: number;
+    deadlineReminderHour?: number;
+    quietHoursStart?: number;
+    quietHoursEnd?: number;
+  }
+) {
+  const { error } = await supabase
+    .from("learner_profiles")
+    .update({
+      whatsapp_phone: input.whatsappPhone?.trim() || null,
+      whatsapp_opt_in: Boolean(input.whatsappOptIn && input.whatsappPhone),
+      whatsapp_study_reminders: Boolean(input.whatsappOptIn && input.whatsappStudyReminders && input.whatsappPhone),
+      whatsapp_deadline_reminders: Boolean(input.whatsappOptIn && input.whatsappDeadlineReminders && input.whatsappPhone),
+      reminder_email: input.reminderEmail?.trim() || null,
+      fallback_email_enabled: Boolean(input.fallbackEmailEnabled && input.reminderEmail),
+      reminder_timezone: input.reminderTimezone || "Africa/Johannesburg",
+      reminder_paused_until: input.reminderPausedUntil || null,
+      study_reminder_hour: input.studyReminderHour ?? 18,
+      deadline_reminder_hour: input.deadlineReminderHour ?? 10,
+      quiet_hours_start: input.quietHoursStart ?? 20,
+      quiet_hours_end: input.quietHoursEnd ?? 6
+    })
+    .eq("user_id", user.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function updateLearnerSubjectMarks(supabase: SupabaseClient, profileId: string, subjects: LearnerSubject[]) {

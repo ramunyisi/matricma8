@@ -27,6 +27,14 @@ export type LearnerProfile = {
   whatsappOptIn?: boolean;
   whatsappStudyReminders?: boolean;
   whatsappDeadlineReminders?: boolean;
+  reminderEmail?: string;
+  fallbackEmailEnabled?: boolean;
+  reminderTimezone?: string;
+  reminderPausedUntil?: string;
+  studyReminderHour?: number;
+  deadlineReminderHour?: number;
+  quietHoursStart?: number;
+  quietHoursEnd?: number;
   subjects: LearnerSubject[];
 };
 
@@ -138,4 +146,22 @@ export type StudyTask = {
   durationMinutes: number;
   dueDate?: string;
   completed?: boolean;
+};
+
+export type CoachTopicMemory = {
+  id: string;
+  learnerId: string;
+  subjectName: string;
+  topicKey: string;
+  topicLabel: string;
+  sessionCount: number;
+  questionCount: number;
+  struggleCount: number;
+  successCount: number;
+  lastMode: "chat" | "explain" | "practice" | "revise" | "testMe" | "markAnswer";
+  lastSummary?: string;
+  lastQuestion?: string;
+  lastAnswer?: string;
+  lastSeenAt: string;
+  updatedAt: string;
 };

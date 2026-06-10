@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, CalendarPlus, RefreshCw, Send } from "lucide-react";
+import { Bot, CalendarPlus, CheckCircle2, Flame, RefreshCw, Send, Sparkles, Target, BookOpen } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { loadApsRules, loadBursaries, loadPastPaperQuestions } from "@/lib/content-data";
+import { loadCoachMemory, recordCoachMemory, sortCoachMemory, summarizeCoachMemory } from "@/lib/coach-memory";
 import { sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { saveStudyPlan } from "@/lib/study-plan-data";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
-import type { ApsRule, Bursary, PastPaperQuestion, StudyTask } from "@/lib/types";
-import type { ConversationMessage } from "@/lib/ai";
+import type { ApsRule, Bursary, CoachTopicMemory, PastPaperQuestion, StudyTask } from "@/lib/types";
+import type { AnswerReview, CoachMode, ConversationMessage } from "@/lib/ai";
 import { friendlyError } from "@/lib/utils";
 
 type ChatMessage = {
@@ -20,6 +21,7 @@ type ChatMessage = {
   content: string;
   streaming?: boolean;
   plan?: StudyTask[];
+  review?: AnswerReview;
   isLocal?: boolean; // locally-generated — excluded from Gemini history
 };
 
@@ -30,6 +32,14 @@ const QUICK_PROMPTS = [
   "Give me a practice question on this topic.",
   "What are common mistakes learners make here?",
   "How does this come up in NSC exams?"
+];
+
+const COACH_MODES: { mode: CoachMode; label: string; icon: typeof Sparkles }[] = [
+  { mode: "chat", label: "Chat", icon: Sparkles },
+  { mode: "explain", label: "Explain", icon: BookOpen },
+  { mode: "practice", label: "Practice", icon: Target },
+  { mode: "revise", label: "Revise", icon: Flame },
+  { mode: "testMe", label: "Test me", icon: CheckCircle2 }
 ];
 
 export default function StudyCoachPage() {
@@ -48,6 +58,10 @@ export default function StudyCoachPage() {
   ]);
   const [input, setInput] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
+  const [coachMode, setCoachMode] = useState<CoachMode>("chat");
+  const [answerDraft, setAnswerDraft] = useState("");
+  const [recentTopics, setRecentTopics] = useState<string[]>([]);
+  const [coachMemory, setCoachMemory] = useState<CoachTopicMemory[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -55,7 +69,14 @@ export default function StudyCoachPage() {
   const grounding = {
     apsRules: apsRules.map((r) => ({ institutionName: r.institutionName, programmeName: r.programmeName, sourceUrl: r.sourceUrl })),
     bursaries: bursaries.map((b) => ({ name: b.name, fieldOfStudy: b.fieldOfStudy, deadline: b.deadline, sourceUrl: b.sourceUrl })),
-    pastPaperQuestions: questions.map((q) => ({ subject: q.subject, topic: q.topic, year: q.year, sourceUrl: q.sourceUrl }))
+    pastPaperQuestions: questions.map((q) => ({ subject: q.subject, topic: q.topic, year: q.year, sourceUrl: q.sourceUrl })),
+    coachMemory: summarizeCoachMemory(coachMemory)
+  };
+  const coachStats = {
+    trackedTopics: coachMemory.length,
+    totalSessions: coachMemory.reduce((sum, item) => sum + item.sessionCount, 0),
+    repeatedWeakTopics: coachMemory.filter((item) => item.struggleCount >= 3).length,
+    topWeakTopic: sortCoachMemory(coachMemory)[0]
   };
 
   useEffect(() => {
@@ -70,6 +91,35 @@ export default function StudyCoachPage() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function loadMemory() {
+      if (isDemo || !profile.id) {
+        setCoachMemory([]);
+        return;
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) return;
+
+      try {
+        const memory = await loadCoachMemory(supabase, profile.id, 8);
+        if (isMounted) {
+          setCoachMemory(sortCoachMemory(memory));
+        }
+      } catch {
+        if (isMounted) setCoachMemory([]);
+      }
+    }
+
+    void loadMemory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isDemo, profile.id]);
+
+  useEffect(() => {
     if (profile.subjects.length > 0 && !selectedSubject) {
       setSelectedSubject(profile.subjects[0].name);
     }
@@ -79,10 +129,54 @@ export default function StudyCoachPage() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("matricsa-study-coach-topics");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setRecentTopics(parsed.filter((item): item is string => typeof item === "string").slice(0, 5));
+        }
+      }
+    } catch {
+      // Ignore storage failures.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("matricsa-study-coach-topics", JSON.stringify(recentTopics.slice(0, 5)));
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [recentTopics]);
+
   // Cancel any in-flight stream on unmount
   useEffect(() => {
     return () => { abortRef.current?.abort(); };
   }, []);
+
+  async function persistCoachMemoryEntry(payload: {
+    subjectName: string;
+    topicLabel: string;
+    mode: CoachMode;
+    question?: string;
+    answer?: string;
+    summary?: string;
+    review?: AnswerReview | null;
+  }) {
+    if (isDemo || !profile.id) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    try {
+      await recordCoachMemory(supabase, profile.id, payload);
+      const memory = await loadCoachMemory(supabase, profile.id, 8);
+      setCoachMemory(sortCoachMemory(memory));
+    } catch {
+      // Ignore persistence failures; the coach still works.
+    }
+  }
 
   async function sendMessage(text: string) {
     const content = text.trim();
@@ -106,6 +200,7 @@ export default function StudyCoachPage() {
     ];
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    setRecentTopics((prev) => [content, ...prev.filter((item) => item !== content)].slice(0, 5));
     setInput("");
     setIsStreaming(true);
 
@@ -119,12 +214,12 @@ export default function StudyCoachPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        // Fix 5: pass selectedSubject. Fix 6: no grounding on stream requests.
         body: JSON.stringify({
           type: "stream",
           messages: history,
           profile: isDemo ? null : profile,
-          focusSubject: selectedSubject || undefined
+          focusSubject: selectedSubject || undefined,
+          coachMode
         })
       });
 
@@ -146,6 +241,13 @@ export default function StudyCoachPage() {
       }
 
       setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, streaming: false } : m)));
+      await persistCoachMemoryEntry({
+        subjectName: selectedSubject || profile.subjects[0]?.name || "General",
+        topicLabel: `${selectedSubject ? `${selectedSubject}: ` : ""}${content}`,
+        mode: coachMode,
+        question: content,
+        summary: accumulated.slice(0, 280)
+      });
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return; // clean unmount
       setMessages((prev) =>
@@ -162,6 +264,7 @@ export default function StudyCoachPage() {
 
   async function generatePlan() {
     if (isStreaming) return;
+    const recentLabel = "7-day study plan";
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: "Generate my 7-day study plan." };
     const assistantMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -171,6 +274,7 @@ export default function StudyCoachPage() {
     };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    setRecentTopics((prev) => [recentLabel, ...prev.filter((item) => item !== recentLabel)].slice(0, 5));
     setIsStreaming(true);
 
     try {
@@ -202,16 +306,98 @@ export default function StudyCoachPage() {
     }
   }
 
+  async function reviewAnswer() {
+    if (isStreaming || !answerDraft.trim()) return;
+    const recentLabel = input.trim() || selectedSubject || "Marked answer";
+
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: `Please mark my answer for ${selectedSubject || "this subject"}${input.trim() ? ` on: ${input.trim()}` : "."}`
+    };
+    const assistantMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "Marking your answer...",
+      streaming: true
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    setRecentTopics((prev) => [recentLabel, ...prev.filter((item) => item !== recentLabel)].slice(0, 5));
+    setIsStreaming(true);
+
+    try {
+      const res = await fetch("/api/coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "markAnswer",
+          subject: selectedSubject || undefined,
+          topic: input.trim() || undefined,
+          question: input.trim() || undefined,
+          learnerAnswer: answerDraft,
+          grade: profile.grade,
+          grounding
+        })
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? `Request failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      const review = normaliseReview(data.result);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsg.id
+            ? {
+                ...m,
+                content: review.summary,
+                review,
+                streaming: false
+              }
+            : m
+        )
+      );
+      await persistCoachMemoryEntry({
+        subjectName: selectedSubject || profile.subjects[0]?.name || "General",
+        topicLabel: `${selectedSubject ? `${selectedSubject}: ` : ""}${recentLabel}`,
+        mode: "markAnswer",
+        question: input.trim() || recentLabel,
+        answer: answerDraft,
+        summary: review.summary,
+        review
+      });
+      setAnswerDraft("");
+    } catch (error) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsg.id
+            ? { ...m, content: friendlyError(error, "Could not mark the answer right now."), streaming: false }
+            : m
+        )
+      );
+    } finally {
+      setIsStreaming(false);
+    }
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      sendMessage(input);
+      if (coachMode !== "markAnswer") {
+        sendMessage(input);
+      }
     }
   }
 
   function startNewConversation() {
     abortRef.current?.abort();
     setIsStreaming(false);
+    setCoachMode("chat");
+    setAnswerDraft("");
+    setInput("");
     setMessages([
       {
         id: crypto.randomUUID(),
@@ -258,6 +444,32 @@ export default function StudyCoachPage() {
             </div>
           </div>
 
+          <div className="mt-3 flex flex-wrap gap-2">
+            {COACH_MODES.map((option) => {
+              const active = coachMode === option.mode;
+              const Icon = option.icon;
+              return (
+                <button
+                  key={option.mode}
+                  onClick={() => setCoachMode(option.mode)}
+                  className={`focus-ring inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black transition ${
+                    active ? "border-veld bg-veld text-white" : "border-ink/10 bg-white text-ink/70 hover:bg-chalk"
+                  }`}
+                >
+                  <Icon size={12} />
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-ink/55">
+            {coachMode === "chat" && "Ask naturally. The coach will explain, practise, or revise based on your prompt."}
+            {coachMode === "explain" && "Best for concepts, definitions, and worked examples."}
+            {coachMode === "practice" && "Best for exam-style questions and step-by-step solutions."}
+            {coachMode === "revise" && "Best for summaries, formulas, and common mistakes."}
+            {coachMode === "testMe" && "The coach will ask one question and wait for your attempt."}
+          </p>
+
           <div className="mt-4 min-h-96 max-h-[520px] flex-1 space-y-4 overflow-y-auto pr-1">
             {messages.map((msg) => (
               <MessageBubble key={msg.id} msg={msg} />
@@ -271,13 +483,17 @@ export default function StudyCoachPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isStreaming}
-              placeholder={`Ask about ${selectedSubject || "any CAPS topic"}… (Enter to send, Shift+Enter for new line)`}
+              placeholder={
+                coachMode === "markAnswer"
+                  ? `Type the question or topic you want marked for ${selectedSubject || "your subject"}…`
+                  : `Ask about ${selectedSubject || "any CAPS topic"}… (Enter to send, Shift+Enter for new line)`
+              }
               className="focus-ring min-h-12 flex-1 resize-none rounded-lg border border-ink/15 p-3 text-sm disabled:opacity-60"
               rows={2}
             />
             <button
-              onClick={() => sendMessage(input)}
-              disabled={isStreaming || !input.trim()}
+              onClick={() => (coachMode === "markAnswer" ? reviewAnswer() : sendMessage(input))}
+              disabled={isStreaming || (coachMode === "markAnswer" ? !answerDraft.trim() : !input.trim())}
               className="focus-ring flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-veld text-white disabled:opacity-60"
             >
               <Send size={18} />
@@ -286,6 +502,114 @@ export default function StudyCoachPage() {
         </Card>
 
         <div className="space-y-4">
+          <Card>
+            <h2 className="text-lg font-black">Progress</h2>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-ink/10 bg-chalk p-3">
+                <p className="text-[11px] font-black uppercase tracking-widest text-ink/45">Topics</p>
+                <p className="mt-1 text-2xl font-black">{coachStats.trackedTopics}</p>
+              </div>
+              <div className="rounded-lg border border-ink/10 bg-chalk p-3">
+                <p className="text-[11px] font-black uppercase tracking-widest text-ink/45">Sessions</p>
+                <p className="mt-1 text-2xl font-black">{coachStats.totalSessions}</p>
+              </div>
+              <div className="rounded-lg border border-ink/10 bg-chalk p-3">
+                <p className="text-[11px] font-black uppercase tracking-widest text-ink/45">Weak areas</p>
+                <p className="mt-1 text-2xl font-black">{coachStats.repeatedWeakTopics}</p>
+              </div>
+            </div>
+            {coachStats.topWeakTopic ? (
+              <div className="mt-3 rounded-lg border border-protea/15 bg-protea/10 p-3">
+                <p className="text-xs font-black uppercase tracking-widest text-protea">Start here</p>
+                <p className="mt-1 text-sm font-bold text-ink">{coachStats.topWeakTopic.topicLabel}</p>
+                <p className="mt-1 text-xs text-ink/65">
+                  {coachStats.topWeakTopic.subjectName} • {coachStats.topWeakTopic.struggleCount} struggle points • last {coachStats.topWeakTopic.lastMode}
+                </p>
+                <p className="mt-2 text-xs text-ink/60">
+                  The coach will prioritise this area when you ask for revision or practice on that subject.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-ink/45">No stored history yet. Use the coach a few times to build progress data.</p>
+            )}
+          </Card>
+
+          {coachMode === "markAnswer" ? (
+            <Card>
+              <h2 className="text-lg font-black">Mark my answer</h2>
+              <p className="mt-1 text-sm text-ink/65">
+                Put the question or topic in the main box, paste your answer here, then ask the coach to mark it.
+              </p>
+              <textarea
+                value={answerDraft}
+                onChange={(e) => setAnswerDraft(e.target.value)}
+                placeholder="Paste your answer here..."
+                className="focus-ring mt-3 min-h-36 w-full resize-y rounded-lg border border-ink/15 p-3 text-sm"
+              />
+              <button
+                onClick={reviewAnswer}
+                disabled={isStreaming || !answerDraft.trim()}
+                className="focus-ring mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-veld px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
+              >
+                <CheckCircle2 size={16} /> Review answer
+              </button>
+            </Card>
+          ) : null}
+
+          <Card>
+            <h2 className="text-lg font-black">Recent topics</h2>
+            <p className="mt-1 text-sm text-ink/65">Reuse what you were working on without typing it again.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {recentTopics.length > 0 ? (
+                recentTopics.map((topic) => (
+                  <button
+                    key={topic}
+                    onClick={() => setInput(topic)}
+                    className="focus-ring rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-chalk"
+                  >
+                    {topic.length > 36 ? `${topic.slice(0, 36)}…` : topic}
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-ink/45">No recent topics yet.</p>
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="text-lg font-black">Weak areas</h2>
+            <p className="mt-1 text-sm text-ink/65">The coach keeps a running list of repeated topics that need revision.</p>
+            <div className="mt-3 space-y-2">
+              {coachMemory.length > 0 ? (
+                coachMemory.slice(0, 5).map((item) => {
+                  const weaknessScore = item.struggleCount * 2 - item.successCount;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedSubject(item.subjectName);
+                        setInput(item.topicLabel);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg border border-ink/10 px-3 py-2 text-left hover:bg-chalk"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold">{item.topicLabel}</p>
+                        <p className="text-[11px] text-ink/55">
+                          {item.subjectName} • {item.sessionCount} session{item.sessionCount === 1 ? "" : "s"} • last {item.lastMode}
+                        </p>
+                      </div>
+                      <Badge tone={weaknessScore >= 4 ? "risk" : weaknessScore >= 2 ? "watch" : "safe"}>
+                        {weaknessScore >= 4 ? "Weak" : weaknessScore >= 2 ? "Review" : "Warm"}
+                      </Badge>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-ink/45">No persistent weak areas yet. Use the coach a few times and they will appear here.</p>
+              )}
+            </div>
+          </Card>
+
           <Card>
             <h2 className="text-lg font-black">Your subjects</h2>
             <div className="mt-3 space-y-1.5">
@@ -366,6 +690,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           <p className="animate-pulse text-sm text-ink/50">Thinking…</p>
         ) : msg.plan ? (
           <PlanView content={msg.content} tasks={msg.plan} />
+        ) : msg.review ? (
+          <ReviewView review={msg.review} content={msg.content} />
         ) : (
           <>
             <Markdown content={msg.content} />
@@ -392,6 +718,49 @@ function PlanView({ content, tasks }: { content: string; tasks: StudyTask[] }) {
         ))}
       </div>
     </>
+  );
+}
+
+function ReviewView({ content, review }: { content: string; review: AnswerReview }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-bold">{content}</p>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-ink/10 bg-emerald-50 p-3">
+          <p className="text-xs font-black text-emerald-700">Strengths</p>
+          <ul className="mt-2 space-y-1 pl-4">
+            {review.strengths.map((item, index) => (
+              <li key={index} className="list-disc text-sm leading-6 text-ink">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-lg border border-ink/10 bg-amber-50 p-3">
+          <p className="text-xs font-black text-amber-700">Improve</p>
+          <ul className="mt-2 space-y-1 pl-4">
+            {review.improvements.map((item, index) => (
+              <li key={index} className="list-disc text-sm leading-6 text-ink">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="rounded-lg border border-ink/10 bg-chalk p-3 text-sm">
+        <p className="font-black text-ink">Summary</p>
+        <p className="mt-1 leading-6 text-ink/80">{review.summary}</p>
+        <p className="mt-2 text-xs font-bold text-protea">Likely marks lost: {review.likelyMarksLost}</p>
+        <p className="mt-1 text-xs text-ink/60">Confidence: {review.confidence}</p>
+        <p className="mt-1 text-xs text-ink/60">Next step: {review.nextStep}</p>
+        {review.modelAnswer ? (
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs font-black text-veld">Show model answer</summary>
+            <p className="mt-2 text-sm leading-6 text-ink/75">{review.modelAnswer}</p>
+          </details>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -505,4 +874,29 @@ function normalisePlan(result: unknown, profile: ReturnType<typeof useLearnerPro
     return (result as { tasks: StudyTask[] }).tasks;
   }
   return generateLocalStudyPlan(profile);
+}
+
+function normaliseReview(result: unknown): AnswerReview {
+  const fallback: AnswerReview = {
+    summary: "Your answer needs a bit more detail and clearer steps.",
+    strengths: ["You attempted the question."],
+    improvements: ["Show your working more clearly."],
+    likelyMarksLost: 2,
+    nextStep: "Rewrite the solution step by step.",
+    confidence: "medium"
+  };
+
+  if (!result || typeof result !== "object") return fallback;
+  const review = result as Partial<AnswerReview>;
+  return {
+    summary: typeof review.summary === "string" ? review.summary : fallback.summary,
+    strengths: Array.isArray(review.strengths) ? review.strengths.filter((item): item is string => typeof item === "string") : fallback.strengths,
+    improvements: Array.isArray(review.improvements)
+      ? review.improvements.filter((item): item is string => typeof item === "string")
+      : fallback.improvements,
+    likelyMarksLost: typeof review.likelyMarksLost === "number" ? review.likelyMarksLost : fallback.likelyMarksLost,
+    nextStep: typeof review.nextStep === "string" ? review.nextStep : fallback.nextStep,
+    modelAnswer: typeof review.modelAnswer === "string" ? review.modelAnswer : undefined,
+    confidence: review.confidence === "low" || review.confidence === "medium" || review.confidence === "high" ? review.confidence : fallback.confidence
+  };
 }

@@ -1,6 +1,7 @@
 import { createHmac } from "crypto";
 import { getServiceSupabase } from "@/lib/auth-server";
 import { streamCoachResponse, type ConversationMessage } from "@/lib/ai";
+import { loadCoachMemory, recordCoachMemory, summarizeCoachMemory } from "@/lib/coach-memory";
 import { normalizeWhatsappPhone } from "@/lib/whatsapp-reminders";
 import type { LearnerProfile } from "@/lib/types";
 
@@ -77,10 +78,12 @@ export async function POST(request: Request) {
 
   const messages: ConversationMessage[] = [...previousMessages, { role: "user", content: messageText }];
   const profile = learnerRow ? mapToProfile(learnerRow) : null;
+  const coachMemory = learnerRow ? await loadCoachMemory(supabase, learnerRow.id, 8).catch(() => []) : [];
+  const grounding = coachMemory.length > 0 ? { coachMemory: summarizeCoachMemory(coachMemory) } : undefined;
 
   let aiResponse = "";
   try {
-    for await (const chunk of streamCoachResponse(messages, profile, undefined, "whatsapp")) {
+    for await (const chunk of streamCoachResponse(messages, profile, grounding, "whatsapp")) {
       aiResponse += chunk;
     }
   } catch {
@@ -99,6 +102,15 @@ export async function POST(request: Request) {
     { role: "assistant" as const, content: aiResponse }
   ].slice(-MAX_HISTORY_MESSAGES);
   await upsertSession(supabase, phone, learnerRow?.id ?? null, updatedMessages);
+  if (learnerRow) {
+    await recordCoachMemory(supabase, learnerRow.id, {
+      subjectName: inferCoachSubject(profile, messageText),
+      topicLabel: messageText.slice(0, 120),
+      mode: "chat",
+      question: messageText,
+      summary: aiResponse.slice(0, 280)
+    }).catch(() => null);
+  }
 
   return twiml(reply);
 }
@@ -267,4 +279,11 @@ function mapToProfile(row: LearnerRow): LearnerProfile {
     examDate: row.exam_date ?? "",
     subjects
   };
+}
+
+function inferCoachSubject(profile: LearnerProfile | null, messageText: string) {
+  if (!profile) return "General";
+  const lower = messageText.toLowerCase();
+  const match = profile.subjects.find((subject) => lower.includes(subject.name.toLowerCase()));
+  return match?.name ?? profile.subjects[0]?.name ?? "General";
 }

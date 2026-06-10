@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { BookOpen, Bot, Building2, Calculator, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route, X } from "lucide-react";
+import { BellRing, BookOpen, Bot, Building2, Calculator, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route, X } from "lucide-react";
 import { getLearnerProfile } from "@/lib/learner-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
-import matricLogo from "../matriclogo.png";
+import matricLogo from "../matricsalogo.png";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -19,6 +19,7 @@ const navItems = [
   { href: "/past-papers", label: "Past Papers", icon: BookOpen },
   { href: "/universities", label: "Universities", icon: Building2 },
   { href: "/bursaries", label: "Bursaries", icon: Search },
+  { href: "/notifications", label: "Notifications", icon: BellRing },
   { href: "/pathways", label: "Pathways", icon: Route },
   { href: "/profile", label: "Profile", icon: UserCircle },
   { href: "/admin", label: "Admin", icon: ShieldCheck }
@@ -116,9 +117,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-chalk">
       <header className="sticky top-0 z-40 border-b border-ink/[.07] bg-chalk/95 shadow-[0_1px_0_rgba(23,33,43,0.04)] backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-2 font-black tracking-tight text-ink">
+          <Link href="/" className="flex items-center font-black tracking-tight text-ink">
             <Image src={matricLogo} alt="MatricSA logo" width={36} height={36} className="h-9 w-9 rounded-lg object-contain" />
-            <span>MatricSA</span>
           </Link>
           <button
             onClick={() => setMenuOpen(true)}

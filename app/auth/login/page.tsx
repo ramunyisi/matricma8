@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { friendlyError } from "@/lib/utils";
-import matricLogo from "../../../matriclogo.png";
+import matricLogo from "../../../matricsalogo.png";
 
 export default function LoginPage() {
   const [message, setMessage] = useState("");
@@ -49,13 +49,10 @@ function AuthCard({ title, message, isSubmitting, onSubmit }: { title: string; m
   return (
     <main className="grid min-h-screen place-items-center bg-chalk px-4">
       <form onSubmit={onSubmit} className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center">
           <Image src={matricLogo} alt="MatricSA logo" width={40} height={40} className="h-10 w-10 rounded-lg object-contain" />
-          <div>
-            <p className="text-sm font-bold text-veld">MatricSA</p>
-            <h1 className="text-2xl font-black">{title}</h1>
-          </div>
         </div>
+        <h1 className="mt-3 text-2xl font-black">{title}</h1>
         <label className="mt-6 block text-sm font-bold">Email</label>
         <input name="email" type="email" required className="focus-ring mt-2 w-full rounded-lg border border-ink/15 px-3 py-3" />
         <label className="mt-4 block text-sm font-bold">Password</label>

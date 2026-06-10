@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { explainTopic, generatePracticeExplanation, generateRelatedPracticeQuestion, generateStudyPlan, streamCoachResponse } from "@/lib/ai";
+import {
+  explainTopic,
+  generateClarifyingQuestion,
+  generatePracticeExplanation,
+  generateRelatedPracticeQuestion,
+  generateStudyPlan,
+  markLearnerAnswer,
+  shouldAskForClarification,
+  streamCoachResponse
+} from "@/lib/ai";
 import { demoProfile } from "@/lib/sample-data";
 
 const messageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1) });
@@ -10,6 +19,13 @@ const requestSchema = z.discriminatedUnion("type", [
     type: z.literal("stream"),
     messages: z.array(messageSchema).min(1),
     profile: z.any().optional(),
+    focusSubject: z.string().optional(),
+    coachMode: z.enum(["chat", "explain", "practice", "revise", "testMe", "markAnswer"]).optional(),
+    grounding: z.any().optional()
+  }),
+  z.object({
+    type: z.literal("followUp"),
+    prompt: z.string().min(1),
     focusSubject: z.string().optional()
   }),
   z.object({
@@ -34,6 +50,15 @@ const requestSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("relatedPracticeQuestion"),
     questionMetadata: z.any()
+  }),
+  z.object({
+    type: z.literal("markAnswer"),
+    subject: z.string().optional(),
+    topic: z.string().optional(),
+    question: z.string().optional(),
+    learnerAnswer: z.string().min(1),
+    grade: z.number().int().min(10).max(12).optional(),
+    grounding: z.any().optional()
   })
 ]);
 
@@ -42,8 +67,22 @@ export async function POST(request: Request) {
     const body = requestSchema.parse(await request.json());
 
     if (body.type === "stream") {
+      const lastUserMessage = [...body.messages].reverse().find((message) => message.role === "user")?.content ?? "";
+      if (shouldAskForClarification(lastUserMessage, body.focusSubject)) {
+        const clarification = await generateClarifyingQuestion(lastUserMessage, body.focusSubject);
+        return new Response(clarification, {
+          headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" }
+        });
+      }
       const encoder = new TextEncoder();
-      const generator = streamCoachResponse(body.messages, body.profile ?? null, undefined, "web", body.focusSubject);
+      const generator = streamCoachResponse(
+        body.messages,
+        body.profile ?? null,
+        body.grounding,
+        "web",
+        body.focusSubject,
+        body.coachMode ?? "chat"
+      );
       const stream = new ReadableStream({
         async start(controller) {
           try {
@@ -75,6 +114,23 @@ export async function POST(request: Request) {
 
     if (body.type === "relatedPracticeQuestion") {
       const result = await generateRelatedPracticeQuestion(body.questionMetadata);
+      return NextResponse.json({ result, verified: false });
+    }
+
+    if (body.type === "markAnswer") {
+      const result = await markLearnerAnswer({
+        subject: body.subject,
+        topic: body.topic,
+        question: body.question,
+        learnerAnswer: body.learnerAnswer,
+        grade: body.grade,
+        grounding: body.grounding
+      });
+      return NextResponse.json({ result, verified: false });
+    }
+
+    if (body.type === "followUp") {
+      const result = await generateClarifyingQuestion(body.prompt, body.focusSubject);
       return NextResponse.json({ result, verified: false });
     }
 

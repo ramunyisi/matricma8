@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { getServiceSupabase } from "@/lib/auth-server";
-import { buildBursaryReminderMessage, buildStudyReminderMessage, normalizeWhatsappPhone, reminderKeyForBursary, reminderKeyForStudy } from "@/lib/whatsapp-reminders";
+import { hasEmailTransport, sendFallbackEmail } from "@/lib/email";
+import {
+  buildBursaryReminderMessage,
+  buildStudyReminderMessage,
+  normalizeWhatsappPhone,
+  reminderKeyForBursary,
+  reminderKeyForStudy
+} from "@/lib/whatsapp-reminders";
 import { hasWhatsappTransport, sendWhatsappMessage } from "@/lib/whatsapp";
 import type { LearnerProfile, StudyTask } from "@/lib/types";
 
@@ -19,7 +26,16 @@ type LearnerProfileRow = {
   whatsapp_opt_in: boolean | null;
   whatsapp_study_reminders: boolean | null;
   whatsapp_deadline_reminders: boolean | null;
+  reminder_email: string | null;
+  fallback_email_enabled: boolean | null;
+  reminder_timezone: string | null;
+  reminder_paused_until: string | null;
+  study_reminder_hour: number | null;
+  deadline_reminder_hour: number | null;
+  quiet_hours_start: number | null;
+  quiet_hours_end: number | null;
   whatsapp_last_study_reminder_at: string | null;
+  whatsapp_last_deadline_reminder_at: string | null;
   learner_subjects?: Array<{
     id: string;
     current_mark: number | string;
@@ -48,7 +64,7 @@ type StudyPlanRow = {
   }>;
 };
 
-const timezone = "Africa/Johannesburg";
+const defaultTimezone = "Africa/Johannesburg";
 
 export async function GET(request: Request) {
   const { allowed } = authorizeDispatch(request);
@@ -57,16 +73,20 @@ export async function GET(request: Request) {
   }
 
   const supabase = getServiceSupabase();
-  const transportAvailable = hasWhatsappTransport();
-  const today = todayInSouthAfrica();
+  const whatsappEnabled = hasWhatsappTransport();
+  const emailEnabled = hasEmailTransport();
   const summary = {
-    transportAvailable,
+    whatsappEnabled,
+    emailEnabled,
     learnersChecked: 0,
     studyMessagesSent: 0,
     bursaryMessagesSent: 0,
-    skippedNoPhone: 0,
-    skippedNoOptIn: 0,
-    skippedNoConfig: 0
+    studyMessagesFailed: 0,
+    bursaryMessagesFailed: 0,
+    skippedNoChannel: 0,
+    skippedPaused: 0,
+    skippedQuietHours: 0,
+    skippedNotScheduled: 0
   };
 
   const { data: learners, error: learnerError } = await supabase
@@ -85,7 +105,16 @@ export async function GET(request: Request) {
       whatsapp_opt_in,
       whatsapp_study_reminders,
       whatsapp_deadline_reminders,
+      reminder_email,
+      fallback_email_enabled,
+      reminder_timezone,
+      reminder_paused_until,
+      study_reminder_hour,
+      deadline_reminder_hour,
+      quiet_hours_start,
+      quiet_hours_end,
       whatsapp_last_study_reminder_at,
+      whatsapp_last_deadline_reminder_at,
       learner_subjects (
         id,
         current_mark,
@@ -105,78 +134,106 @@ export async function GET(request: Request) {
 
   for (const row of (learners ?? []) as LearnerProfileRow[]) {
     summary.learnersChecked += 1;
-    let sentDeadlineForLearner = false;
-    const phone = normalizeWhatsappPhone(row.whatsapp_phone ?? "");
-    if (!phone) {
-      summary.skippedNoPhone += 1;
-      continue;
-    }
 
     const learnerProfile = mapLearnerProfile(row);
-    if (!transportAvailable) {
-      summary.skippedNoConfig += 1;
+    const timeZone = learnerProfile.reminderTimezone || defaultTimezone;
+    const now = new Date();
+    const today = formatDateInTimezone(now, timeZone);
+    const hour = currentHourInTimezone(now, timeZone);
+
+    if (isReminderPaused(row.reminder_paused_until, today)) {
+      summary.skippedPaused += 1;
       continue;
     }
 
-    if (row.whatsapp_study_reminders && row.whatsapp_last_study_reminder_at !== today) {
-      const studyTasks = await loadStudyTasksForLearner(supabase, learnerProfile.id, learnerProfile);
-      const message = buildStudyReminderMessage(learnerProfile, studyTasks);
+    const whatsappTo = normalizeWhatsappPhone(row.whatsapp_phone ?? "");
+    const emailTo = (row.reminder_email ?? "").trim();
+    const canWhatsapp = Boolean(whatsappTo && row.whatsapp_opt_in && whatsappEnabled);
+    const canEmail = Boolean(emailTo && row.fallback_email_enabled && emailEnabled);
+
+    if (!canWhatsapp && !canEmail) {
+      summary.skippedNoChannel += 1;
+      continue;
+    }
+
+    if (row.whatsapp_study_reminders && row.study_reminder_hour === hour && !isWithinQuietHours(row.quiet_hours_start, row.quiet_hours_end, hour)) {
       const reminderKey = reminderKeyForStudy(today);
-      const alreadySent = await wasReminderDelivered(supabase, learnerProfile.id, "study", reminderKey);
-      if (!alreadySent) {
+      if (!(await hasSentReminder(supabase, learnerProfile.id, "study", reminderKey))) {
+        const studyTasks = await loadStudyTasksForLearner(supabase, learnerProfile.id, learnerProfile, timeZone);
+        const message = buildStudyReminderMessage(learnerProfile, studyTasks, now);
         try {
-          await sendWhatsappMessage({ to: phone, body: message });
-          await logReminderDelivery(supabase, learnerProfile.id, "study", reminderKey, { kind: "study", date: today, taskCount: studyTasks.length });
-          await supabase.from("learner_profiles").update({ whatsapp_last_study_reminder_at: today }).eq("id", learnerProfile.id);
+          await deliverReminder({
+            supabase,
+            learnerId: learnerProfile.id,
+            reminderType: "study",
+            reminderKey,
+            whatsappTo: canWhatsapp ? whatsappTo : null,
+            emailTo: canEmail ? emailTo : null,
+            subject: "MatricSA study reminder",
+            body: message,
+            payload: { kind: "study", date: today, taskCount: studyTasks.length }
+          });
           summary.studyMessagesSent += 1;
         } catch {
-          // Keep dispatch moving even if one learner's WhatsApp send fails.
+          summary.studyMessagesFailed += 1;
         }
+      } else {
+        summary.skippedNotScheduled += 1;
       }
     }
 
-    if (row.whatsapp_deadline_reminders) {
+    if (row.whatsapp_deadline_reminders && row.deadline_reminder_hour === hour && !isWithinQuietHours(row.quiet_hours_start, row.quiet_hours_end, hour)) {
       const bursaryRows = await loadDueBursaryRemindersForLearner(supabase, learnerProfile.id, today);
       for (const bursaryReminder of bursaryRows) {
-        const { bursary_id, days_before_deadline, bursaries } = bursaryReminder;
-        const bursary = Array.isArray(bursaries) ? bursaries[0] : bursaries;
-        if (!bursary?.deadline || !days_before_deadline) continue;
+        const bursary = bursaryReminder.bursary;
+        const reminderDays = bursaryReminder.daysBeforeDeadline;
+        if (!bursary?.deadline || !reminderDays) continue;
 
-        const reminderDate = offsetDate(bursary.deadline, -days_before_deadline);
-        if (reminderDate !== today) continue;
-
-        const reminderKey = reminderKeyForBursary(bursary_id, bursary.deadline, days_before_deadline);
-        const alreadySent = await wasReminderDelivered(supabase, learnerProfile.id, "deadline", reminderKey);
-        if (alreadySent) continue;
+        const reminderKey = reminderKeyForBursary(bursary.id, bursary.deadline, reminderDays);
+        if (await hasSentReminder(supabase, learnerProfile.id, "deadline", reminderKey)) {
+          summary.skippedNotScheduled += 1;
+          continue;
+        }
 
         try {
-          const bursaryForMessage = {
-            name: bursary.name,
-            provider: bursary.provider,
-            applicationUrl: bursary.application_url,
-            notes: bursary.notes ?? ""
-          };
-          await sendWhatsappMessage({
-            to: phone,
-            body: buildBursaryReminderMessage(bursaryForMessage, days_before_deadline, bursary.deadline)
+          await deliverReminder({
+            supabase,
+            learnerId: learnerProfile.id,
+            reminderType: "deadline",
+            reminderKey,
+            whatsappTo: canWhatsapp ? whatsappTo : null,
+            emailTo: canEmail ? emailTo : null,
+            subject: `${bursary.name} deadline reminder`,
+            body: buildBursaryReminderMessage(
+              {
+                name: bursary.name,
+                provider: bursary.provider,
+                applicationUrl: bursary.application_url,
+                notes: bursary.notes ?? ""
+              },
+              reminderDays,
+              bursary.deadline
+            ),
+            payload: {
+              kind: "deadline",
+              bursaryId: bursary.id,
+              deadline: bursary.deadline,
+              daysBeforeDeadline: reminderDays
+            }
           });
-          await logReminderDelivery(supabase, learnerProfile.id, "deadline", reminderKey, {
-            kind: "deadline",
-            bursaryId: bursary_id,
-            deadline: bursary.deadline,
-            daysBeforeDeadline: days_before_deadline
-          });
-          await supabase.from("bursary_reminders").update({ last_sent_at: new Date().toISOString() }).eq("learner_id", learnerProfile.id).eq("bursary_id", bursary_id);
+          await supabase
+            .from("bursary_reminders")
+            .update({ last_sent_at: new Date().toISOString() })
+            .eq("learner_id", learnerProfile.id)
+            .eq("bursary_id", bursary.id);
+          await supabase.from("learner_profiles").update({ whatsapp_last_deadline_reminder_at: today }).eq("id", learnerProfile.id);
           summary.bursaryMessagesSent += 1;
-          sentDeadlineForLearner = true;
         } catch {
-          // Keep dispatch moving even if one bursary reminder fails.
+          summary.bursaryMessagesFailed += 1;
         }
       }
-    }
-
-    if (sentDeadlineForLearner) {
-      await supabase.from("learner_profiles").update({ whatsapp_last_deadline_reminder_at: today }).eq("id", learnerProfile.id);
+    } else {
+      summary.skippedQuietHours += 1;
     }
   }
 
@@ -193,6 +250,92 @@ function authorizeDispatch(request: Request) {
   if (cronHeader === "1") return { allowed: true as const };
   if (secret && headerSecret === secret) return { allowed: true as const };
   return { allowed: false as const };
+}
+
+async function deliverReminder(input: {
+  supabase: ReturnType<typeof getServiceSupabase>;
+  learnerId: string;
+  reminderType: string;
+  reminderKey: string;
+  whatsappTo: string | null;
+  emailTo: string | null;
+  subject: string;
+  body: string;
+  payload: Record<string, unknown>;
+}) {
+  const existing = await getReminderDelivery(input.supabase, input.learnerId, input.reminderType, input.reminderKey);
+  const attempts = (existing?.attempt_count ?? 0) + 1;
+  if (attempts > 3) {
+    throw new Error("Retry limit reached.");
+  }
+
+  if (input.whatsappTo) {
+    try {
+      await sendWhatsappMessage({ to: input.whatsappTo, body: input.body });
+      await saveReminderDelivery(input.supabase, {
+        learnerId: input.learnerId,
+        channel: "whatsapp",
+        provider: "twilio",
+        recipient: input.whatsappTo,
+        reminderType: input.reminderType,
+        reminderKey: input.reminderKey,
+        payload: input.payload,
+        status: "sent",
+        attemptCount: attempts
+      });
+      return;
+    } catch (error) {
+      await saveReminderDelivery(input.supabase, {
+        learnerId: input.learnerId,
+        channel: "whatsapp",
+        provider: "twilio",
+        recipient: input.whatsappTo,
+        reminderType: input.reminderType,
+        reminderKey: input.reminderKey,
+        payload: { ...input.payload, channel: "whatsapp" },
+        status: "failed",
+        attemptCount: attempts,
+        errorMessage: error instanceof Error ? error.message : String(error || "Delivery failed")
+      });
+      if (!input.emailTo) {
+        throw error;
+      }
+    }
+  }
+
+  if (input.emailTo) {
+    try {
+      await sendFallbackEmail({ to: input.emailTo, subject: input.subject, text: input.body });
+      await saveReminderDelivery(input.supabase, {
+        learnerId: input.learnerId,
+        channel: "email",
+        provider: "resend",
+        recipient: input.emailTo,
+        reminderType: input.reminderType,
+        reminderKey: input.reminderKey,
+        payload: { ...input.payload, channel: "email" },
+        status: "sent",
+        attemptCount: attempts
+      });
+      return;
+    } catch (error) {
+      await saveReminderDelivery(input.supabase, {
+        learnerId: input.learnerId,
+        channel: "email",
+        provider: "resend",
+        recipient: input.emailTo,
+        reminderType: input.reminderType,
+        reminderKey: input.reminderKey,
+        payload: { ...input.payload, channel: "email" },
+        status: "failed",
+        attemptCount: attempts,
+        errorMessage: error instanceof Error ? error.message : String(error || "Email delivery failed")
+      });
+      throw error;
+    }
+  }
+
+  throw new Error("No delivery channel configured.");
 }
 
 function mapLearnerProfile(row: LearnerProfileRow): LearnerProfile {
@@ -224,11 +367,19 @@ function mapLearnerProfile(row: LearnerProfileRow): LearnerProfile {
     whatsappOptIn: Boolean(row.whatsapp_opt_in),
     whatsappStudyReminders: Boolean(row.whatsapp_study_reminders),
     whatsappDeadlineReminders: Boolean(row.whatsapp_deadline_reminders),
+    reminderEmail: row.reminder_email ?? "",
+    fallbackEmailEnabled: Boolean(row.fallback_email_enabled),
+    reminderTimezone: row.reminder_timezone ?? defaultTimezone,
+    reminderPausedUntil: row.reminder_paused_until ?? "",
+    studyReminderHour: row.study_reminder_hour ?? 18,
+    deadlineReminderHour: row.deadline_reminder_hour ?? 10,
+    quietHoursStart: row.quiet_hours_start ?? 20,
+    quietHoursEnd: row.quiet_hours_end ?? 6,
     subjects
   };
 }
 
-async function loadStudyTasksForLearner(supabase: ReturnType<typeof getServiceSupabase>, learnerId: string, profile: LearnerProfile) {
+async function loadStudyTasksForLearner(supabase: ReturnType<typeof getServiceSupabase>, learnerId: string, profile: LearnerProfile, timeZone: string) {
   const { data, error } = await supabase
     .from("study_plans")
     .select(`
@@ -262,7 +413,7 @@ async function loadStudyTasksForLearner(supabase: ReturnType<typeof getServiceSu
       const subject = Array.isArray(task.subjects) ? task.subjects[0] : task.subjects;
       return {
         id: task.id,
-        day: new Intl.DateTimeFormat("en-ZA", { weekday: "short", timeZone: timezone }).format(task.due_date ? new Date(task.due_date) : new Date()),
+        day: new Intl.DateTimeFormat("en-ZA", { weekday: "short", timeZone }).format(task.due_date ? new Date(task.due_date) : new Date()),
         subject: subject?.name ?? profile.subjects[index % Math.max(profile.subjects.length, 1)]?.name ?? "Study",
         topic: task.topic,
         taskType: mapTaskType(task.task_type),
@@ -279,7 +430,6 @@ async function loadDueBursaryRemindersForLearner(supabase: ReturnType<typeof get
     .select(`
       bursary_id,
       days_before_deadline,
-      send_whatsapp,
       bursaries (
         id,
         name,
@@ -294,52 +444,108 @@ async function loadDueBursaryRemindersForLearner(supabase: ReturnType<typeof get
     .eq("send_whatsapp", true);
 
   if (error || !data) return [];
-  return data.filter((row) => {
-    const bursary = Array.isArray(row.bursaries) ? row.bursaries[0] : row.bursaries;
-    if (!bursary?.deadline || !row.days_before_deadline) return false;
-    return offsetDate(bursary.deadline, -row.days_before_deadline) === today;
-  });
+  return data
+    .map((row) => {
+      const bursary = Array.isArray(row.bursaries) ? row.bursaries[0] : row.bursaries;
+      return bursary?.deadline && row.days_before_deadline && offsetDate(bursary.deadline, -row.days_before_deadline) === today
+        ? { bursary, daysBeforeDeadline: row.days_before_deadline }
+        : null;
+    })
+    .filter((row): row is { bursary: { id: string; name: string; provider: string; deadline: string; application_url: string; notes: string | null }; daysBeforeDeadline: number } => Boolean(row));
 }
 
-async function wasReminderDelivered(supabase: ReturnType<typeof getServiceSupabase>, learnerId: string, reminderType: string, reminderKey: string) {
+async function hasSentReminder(supabase: ReturnType<typeof getServiceSupabase>, learnerId: string, reminderType: string, reminderKey: string) {
   const { data, error } = await supabase
     .from("notification_deliveries")
-    .select("id")
+    .select("id,status")
     .eq("learner_id", learnerId)
-    .eq("channel", "whatsapp")
     .eq("reminder_type", reminderType)
     .eq("reminder_key", reminderKey)
-    .maybeSingle();
+    .eq("status", "sent")
+    .limit(1);
 
   if (error) return false;
-  return Boolean(data);
+  return Boolean(data?.[0]);
 }
 
-async function logReminderDelivery(
+async function getReminderDelivery(supabase: ReturnType<typeof getServiceSupabase>, learnerId: string, reminderType: string, reminderKey: string) {
+  const { data } = await supabase
+    .from("notification_deliveries")
+    .select("attempt_count,status")
+    .eq("learner_id", learnerId)
+    .eq("reminder_type", reminderType)
+    .eq("reminder_key", reminderKey)
+    .order("last_attempt_at", { ascending: false })
+    .limit(1);
+  return data?.[0] ?? null;
+}
+
+async function saveReminderDelivery(
   supabase: ReturnType<typeof getServiceSupabase>,
-  learnerId: string,
-  reminderType: string,
-  reminderKey: string,
-  payload: Record<string, unknown>
+  input: {
+    learnerId: string;
+    channel: "whatsapp" | "email";
+    provider: "twilio" | "resend";
+    recipient: string;
+    reminderType: string;
+    reminderKey: string;
+    payload: Record<string, unknown>;
+    status: "sent" | "failed";
+    attemptCount: number;
+    errorMessage?: string;
+  }
 ) {
-  await supabase.from("notification_deliveries").insert({
-    learner_id: learnerId,
-    channel: "whatsapp",
-    reminder_type: reminderType,
-    reminder_key: reminderKey,
-    payload_json: payload,
-    status: "sent"
-  });
+  const { error } = await supabase.from("notification_deliveries").upsert(
+    {
+      learner_id: input.learnerId,
+      channel: input.channel,
+      delivery_provider: input.provider,
+      recipient: input.recipient,
+      reminder_type: input.reminderType,
+      reminder_key: input.reminderKey,
+      payload_json: input.payload,
+      status: input.status,
+      attempt_count: input.attemptCount,
+      error_message: input.errorMessage ?? null,
+      last_attempt_at: new Date().toISOString(),
+      sent_at: input.status === "sent" ? new Date().toISOString() : undefined
+    },
+    { onConflict: "learner_id,channel,reminder_type,reminder_key" }
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 function offsetDate(date: string, days: number) {
   const value = new Date(`${date}T00:00:00+02:00`);
   value.setDate(value.getDate() + days);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(value);
+  return formatDateInTimezone(value, defaultTimezone);
+}
+
+function formatDateInTimezone(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(date);
+}
+
+function currentHourInTimezone(date: Date, timeZone: string) {
+  return Number.parseInt(new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hour12: false }).format(date), 10);
 }
 
 function todayInSouthAfrica() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+  return formatDateInTimezone(new Date(), defaultTimezone);
+}
+
+function isReminderPaused(pausedUntil: string | null, today: string) {
+  return Boolean(pausedUntil && pausedUntil >= today);
+}
+
+function isWithinQuietHours(start?: number | null, end?: number | null, hour = currentHourInTimezone(new Date(), defaultTimezone)) {
+  const quietStart = typeof start === "number" ? start : 20;
+  const quietEnd = typeof end === "number" ? end : 6;
+  if (quietStart === quietEnd) return false;
+  if (quietStart < quietEnd) return hour >= quietStart && hour < quietEnd;
+  return hour >= quietStart || hour < quietEnd;
 }
 
 function mapTaskType(taskType: string): StudyTask["taskType"] {

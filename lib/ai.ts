@@ -1,10 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
 import type { Bursary, LearnerProfile, LearnerSubject, PastPaperQuestion } from "@/lib/types";
-
-export type ConversationMessage = { role: "user" | "assistant"; content: string };
 import { matchBursaries } from "@/lib/bursaries";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { predictRisk as localPredictRisk } from "@/lib/aps";
+
+export type ConversationMessage = { role: "user" | "assistant"; content: string };
+export type CoachMode = "chat" | "explain" | "practice" | "revise" | "testMe" | "markAnswer";
+export type AnswerReview = {
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  likelyMarksLost: number;
+  nextStep: string;
+  modelAnswer?: string;
+  confidence: "low" | "medium" | "high";
+};
 
 const systemRules = `
 You are MatricSA, an AI study coach for South African CAPS Grade 10-12 learners.
@@ -33,7 +43,72 @@ export type AiGroundingContext = {
   apsRules?: unknown[];
   bursaries?: unknown[];
   pastPaperQuestions?: unknown[];
+  coachMemory?: unknown[];
 };
+
+export function shouldAskForClarification(prompt: string, focusSubject?: string) {
+  const trimmed = prompt.trim();
+  if (!trimmed) return true;
+  if (trimmed.length < 18) return true;
+  if (/^(help|explain|study|practice|revise|test me|what is this|i don't understand|dont understand)$/i.test(trimmed)) {
+    return true;
+  }
+  if (!focusSubject && trimmed.length < 24) return true;
+  return false;
+}
+
+export function buildCoachInstructions(mode: CoachMode, focusSubject?: string) {
+  const subjectLine = focusSubject ? `Focus on ${focusSubject} unless the learner asks for another subject.` : "";
+  const modeInstructions: Record<CoachMode, string> = {
+    chat: "Answer naturally and keep the tone supportive.",
+    explain: "Teach the concept clearly, then show one worked example and one quick check question.",
+    practice: "Set one CAPS-aligned practice question first, then give a step-by-step solution and a short note on the exam method.",
+    revise: "Give a compact revision summary, key formulas or facts, common mistakes, and a short memory aid.",
+    testMe: "Ask one exam-style question only. Do not solve it unless the learner asks for the answer after trying.",
+    markAnswer: "Assess the learner's answer, identify what is correct, where marks are lost, and how to improve. Do not just restate the full solution."
+  };
+
+  return [
+    `Current coaching mode: ${mode}.`,
+    modeInstructions[mode],
+    subjectLine,
+    "If the prompt is vague or missing the topic, ask one short clarifying question instead of guessing.",
+    "If grounding data is available, use it cautiously and label it as stored reference data rather than an official source unless it is explicitly official."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildMemoryGuidance(memory: unknown): string {
+  if (!Array.isArray(memory) || memory.length === 0) return "";
+  const weakTopics = memory
+    .slice(0, 3)
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const typed = item as {
+        subjectName?: string;
+        topicLabel?: string;
+        struggleCount?: number;
+        sessionCount?: number;
+        lastSummary?: string;
+      };
+      if (!typed.topicLabel) return null;
+      const subjectName = typed.subjectName ?? "General";
+      const struggle = typeof typed.struggleCount === "number" ? typed.struggleCount : 0;
+      const sessions = typeof typed.sessionCount === "number" ? typed.sessionCount : 0;
+      return `- ${subjectName}: ${typed.topicLabel} (sessions ${sessions}, struggle ${struggle})${typed.lastSummary ? ` — last summary: ${typed.lastSummary}` : ""}`;
+    })
+    .filter((item): item is string => Boolean(item));
+
+  if (weakTopics.length === 0) return "";
+  return [
+    "Top weak areas from learner history:",
+    ...weakTopics,
+    "Start your response by addressing the strongest weak area first.",
+    "If the learner is asking for practice, give one short drill that targets that weak area.",
+    "If the learner is asking for revision, give the key rule/formula for that weak area before anything else."
+  ].join("\n");
+}
 
 export async function generateStudyPlan(profile: LearnerProfile, subjects: LearnerSubject[], marks: Record<string, number>, targetMarks: Record<string, number>, grounding?: AiGroundingContext) {
   const fallback = generateLocalStudyPlan({ ...profile, subjects });
@@ -52,6 +127,38 @@ export function predictRisk(currentMarks: Record<string, number>, targetMarks: R
 export async function generatePracticeExplanation(questionMetadata: PastPaperQuestion, memoContext?: string) {
   const fallback = `Use the linked official paper and memo. For ${questionMetadata.topic}, identify the command word, list known facts or formulas, answer step by step, then compare with the memo page.`;
   return runAiText("Generate a practice explanation from metadata and optional memo context.", { questionMetadata, memoContext }, fallback);
+}
+
+export async function generateClarifyingQuestion(prompt: string, focusSubject?: string) {
+  const fallback = focusSubject
+    ? `Which part of ${focusSubject} do you want help with, and what grade are you in?`
+    : "Which subject and topic do you want help with?";
+  return runAiText("Ask one short clarifying question when the learner's prompt is too vague.", { prompt, focusSubject }, fallback);
+}
+
+export async function markLearnerAnswer(payload: {
+  subject?: string;
+  topic?: string;
+  question?: string;
+  learnerAnswer: string;
+  grade?: number;
+  grounding?: AiGroundingContext;
+}) {
+  const fallback: AnswerReview = {
+    summary: "Your answer needs a bit more detail and clearer steps.",
+    strengths: ["You attempted the question."],
+    improvements: ["Show each working step clearly.", "Use the correct formula or rule before calculating."],
+    likelyMarksLost: 2,
+    nextStep: "Rewrite your answer in smaller steps and check whether each line follows from the previous one.",
+    modelAnswer: undefined,
+    confidence: "medium"
+  };
+
+  return runAiJson<AnswerReview>(
+    "Mark a learner's answer using South African exam feedback. Return concise, structured feedback only.",
+    payload,
+    fallback
+  );
 }
 
 export async function generateRelatedPracticeQuestion(questionMetadata: PastPaperQuestion) {
@@ -87,7 +194,8 @@ export async function* streamCoachResponse(
   profile: LearnerProfile | null,
   grounding?: AiGroundingContext,
   mode: "web" | "whatsapp" = "web",
-  focusSubject?: string
+  focusSubject?: string,
+  coachMode: CoachMode = "chat"
 ): AsyncGenerator<string> {
   if (!geminiApiKey) {
     yield "AI coaching is not configured. Set GEMINI_API_KEY in your environment.";
@@ -101,7 +209,7 @@ export async function* streamCoachResponse(
       ? "\n\nFor WhatsApp: keep responses under 400 words. Use plain text. Use *bold* for key terms only."
       : "";
 
-  let contextPrefix = systemRules + whatsappNote + "\n\n";
+  let contextPrefix = `${systemRules}${whatsappNote}\n\n${buildCoachInstructions(coachMode, focusSubject)}\n\n`;
   if (profile) {
     const subjectList = profile.subjects.map((s) => `${s.name}: ${s.currentMark}%/${s.targetMark}%`).join(", ");
     contextPrefix += `Learner: Grade ${profile.grade}, Province ${profile.province}, Subjects — ${subjectList}.\n\n`;
@@ -112,6 +220,11 @@ export async function* streamCoachResponse(
   if (grounding) {
     contextPrefix += `Reference data: ${JSON.stringify(grounding)}\n\n`;
   }
+  const memoryGuidance = buildMemoryGuidance(grounding?.coachMemory);
+  if (memoryGuidance) {
+    contextPrefix += `${memoryGuidance}\n\n`;
+  }
+  contextPrefix += "If the learner asks for a plan, explanation, or practice, stay on that task and do not drift into unrelated advice.\n\n";
 
   const contents = messages.map((msg, index) => ({
     role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
