@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { BellRing, BookOpen, Bot, Building2, Calculator, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route, X } from "lucide-react";
+import { BellRing, BookOpen, Bot, Building2, Calculator, FileText, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route, X } from "lucide-react";
 import { getLearnerProfile } from "@/lib/learner-profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ import matricLogo from "../matricsalogo.png";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/study-coach", label: "Study Coach", icon: Bot },
+  { href: "/caps-content", label: "CAPS Content", icon: FileText },
   { href: "/aps", label: "APS", icon: Calculator },
   { href: "/past-papers", label: "Past Papers", icon: BookOpen },
   { href: "/universities", label: "Universities", icon: Building2 },

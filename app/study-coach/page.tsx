@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, CalendarPlus, CheckCircle2, Flame, RefreshCw, Send, Sparkles, Target, BookOpen } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
-import { loadApsRules, loadBursaries, loadPastPaperQuestions } from "@/lib/content-data";
+import { loadApsRules, loadBursaries, loadCapsContent, loadCapsSections, loadPastPaperQuestions } from "@/lib/content-data";
 import { loadCoachMemory, recordCoachMemory, sortCoachMemory, summarizeCoachMemory } from "@/lib/coach-memory";
+import { summarizeCapsContentForPrompt, getCapsSectionsForCoach } from "@/lib/caps-content";
 import { sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { saveStudyPlan } from "@/lib/study-plan-data";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
-import type { ApsRule, Bursary, CoachTopicMemory, PastPaperQuestion, StudyTask } from "@/lib/types";
+import type { ApsRule, Bursary, CapsContentSection, CoachTopicMemory, PastPaperQuestion, StudyTask } from "@/lib/types";
 import type { AnswerReview, CoachMode, ConversationMessage } from "@/lib/ai";
 import { friendlyError } from "@/lib/utils";
 
@@ -23,6 +24,11 @@ type ChatMessage = {
   plan?: StudyTask[];
   review?: AnswerReview;
   isLocal?: boolean; // locally-generated — excluded from Gemini history
+  coachSubjectName?: string;
+  topicLabel?: string;
+  coachMode?: CoachMode;
+  feedback?: "helpful" | "needs_work";
+  sourceTags?: string[];
 };
 
 const WELCOME_ID = "welcome";
@@ -42,34 +48,92 @@ const COACH_MODES: { mode: CoachMode; label: string; icon: typeof Sparkles }[] =
   { mode: "testMe", label: "Test me", icon: CheckCircle2 }
 ];
 
+type CoachPane = "progress" | "sources" | "history";
+
+type QuickActionContext = {
+  coachMode: CoachMode;
+  selectedSubject: string;
+  setCoachMode: (mode: CoachMode) => void;
+  setSelectedSubject: (subject: string) => void;
+  setInput: (value: string) => void;
+  openSubjectPicker: () => void;
+  profile: ReturnType<typeof useLearnerProfile>["profile"];
+};
+
+const QUICK_ACTIONS: { label: string; onClick: (context: QuickActionContext) => void }[] = [
+  {
+    label: "Explain simpler",
+    onClick: ({ selectedSubject, setCoachMode, setInput }) => {
+      setCoachMode("explain");
+      setInput(`Explain ${selectedSubject || "this topic"} more simply with one worked example.`);
+    }
+  },
+  {
+    label: "Give another question",
+    onClick: ({ setCoachMode, selectedSubject, setInput }) => {
+      setCoachMode("practice");
+      setInput(`Give me one more CAPS practice question on ${selectedSubject || "this topic"}.`);
+    }
+  },
+  {
+    label: "Mark my answer",
+    onClick: ({ setCoachMode, selectedSubject, setInput }) => {
+      setCoachMode("markAnswer");
+      setInput(selectedSubject || "Mark my answer");
+    }
+  },
+  {
+    label: "Switch subject",
+    onClick: ({ openSubjectPicker }) => {
+      openSubjectPicker();
+    }
+  }
+];
+
 export default function StudyCoachPage() {
-  const { profile, isDemo } = useLearnerProfile();
+  const { profile, isDemo, isLoading } = useLearnerProfile();
   const [apsRules, setApsRules] = useState<ApsRule[]>(sampleApsRules);
   const [bursaries, setBursaries] = useState<Bursary[]>(sampleBursaries);
   const [questions, setQuestions] = useState<PastPaperQuestion[]>(sampleQuestions);
+  const [capsContent, setCapsContent] = useState<Awaited<ReturnType<typeof loadCapsContent>>>([]);
+  const [capsSections, setCapsSections] = useState<CapsContentSection[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: WELCOME_ID,
       role: "assistant",
       content:
-        "Hi! I'm your MatricSA study coach. Ask me any CAPS question — I can explain concepts, create practice questions, or help you prepare for exams. What would you like to work on today?",
+        "Hi. Choose a subject and a mode, then ask one CAPS topic at a time. I can explain, test, revise, or mark your answer. If you are not sure where to start, use the weak-area panel on the right.",
       isLocal: true
     }
   ]);
   const [input, setInput] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
+  const [subjectLoaded, setSubjectLoaded] = useState(false);
   const [coachMode, setCoachMode] = useState<CoachMode>("chat");
   const [answerDraft, setAnswerDraft] = useState("");
   const [recentTopics, setRecentTopics] = useState<string[]>([]);
   const [coachMemory, setCoachMemory] = useState<CoachTopicMemory[]>([]);
+  const [activePane, setActivePane] = useState<CoachPane>("progress");
+  const [showSubjectPicker, setShowSubjectPicker] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const activeSubject = selectedSubject || profile.subjects[0]?.name || "General";
 
   const grounding = {
     apsRules: apsRules.map((r) => ({ institutionName: r.institutionName, programmeName: r.programmeName, sourceUrl: r.sourceUrl })),
     bursaries: bursaries.map((b) => ({ name: b.name, fieldOfStudy: b.fieldOfStudy, deadline: b.deadline, sourceUrl: b.sourceUrl })),
     pastPaperQuestions: questions.map((q) => ({ subject: q.subject, topic: q.topic, year: q.year, sourceUrl: q.sourceUrl })),
+    capsContent: summarizeCapsContentForPrompt(activeSubject, profile.grade),
+    capsSections: capsSections.length > 0
+      ? capsSections
+          .filter((section) => {
+            const sectionSubject = section.subject.toLowerCase();
+            const chosenSubject = activeSubject.toLowerCase();
+            return !chosenSubject || sectionSubject === "all subjects" || sectionSubject.includes(chosenSubject.toLowerCase()) || chosenSubject.includes(sectionSubject);
+          })
+          .slice(0, 5)
+      : getCapsSectionsForCoach(activeSubject, profile.grade, input || undefined),
     coachMemory: summarizeCoachMemory(coachMemory)
   };
   const coachStats = {
@@ -78,14 +142,17 @@ export default function StudyCoachPage() {
     repeatedWeakTopics: coachMemory.filter((item) => item.struggleCount >= 3).length,
     topWeakTopic: sortCoachMemory(coachMemory)[0]
   };
+  const sourceSummary = buildSourceSummary(grounding);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    Promise.all([loadApsRules(supabase), loadBursaries(supabase), loadPastPaperQuestions(supabase)]).then(
-      ([rules, loadedBursaries, loadedQuestions]) => {
+    Promise.all([loadApsRules(supabase), loadBursaries(supabase), loadPastPaperQuestions(supabase), loadCapsContent(), loadCapsSections()]).then(
+      ([rules, loadedBursaries, loadedQuestions, loadedCaps, loadedSections]) => {
         setApsRules(rules);
         setBursaries(loadedBursaries);
         setQuestions(loadedQuestions);
+        setCapsContent(loadedCaps);
+        setCapsSections(loadedSections);
       }
     );
   }, []);
@@ -120,10 +187,24 @@ export default function StudyCoachPage() {
   }, [isDemo, profile.id]);
 
   useEffect(() => {
-    if (profile.subjects.length > 0 && !selectedSubject) {
-      setSelectedSubject(profile.subjects[0].name);
+    if (subjectLoaded) return;
+    if (isLoading) return;
+
+    if (profile.subjects.length === 0) {
+      setSubjectLoaded(true);
+      return;
     }
-  }, [profile.subjects, selectedSubject]);
+
+    try {
+      const saved = localStorage.getItem("matricsa-study-coach-subject");
+      const validSaved = saved && profile.subjects.some((subject) => subject.name === saved);
+      setSelectedSubject(validSaved ? saved : profile.subjects[0].name);
+    } catch {
+      setSelectedSubject(profile.subjects[0].name);
+    } finally {
+      setSubjectLoaded(true);
+    }
+  }, [isLoading, profile.subjects, subjectLoaded]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -151,6 +232,15 @@ export default function StudyCoachPage() {
     }
   }, [recentTopics]);
 
+  useEffect(() => {
+    if (!subjectLoaded || !selectedSubject) return;
+    try {
+      localStorage.setItem("matricsa-study-coach-subject", selectedSubject);
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [selectedSubject, subjectLoaded]);
+
   // Cancel any in-flight stream on unmount
   useEffect(() => {
     return () => { abortRef.current?.abort(); };
@@ -164,6 +254,7 @@ export default function StudyCoachPage() {
     answer?: string;
     summary?: string;
     review?: AnswerReview | null;
+    feedback?: "helpful" | "needs_work";
   }) {
     if (isDemo || !profile.id) return;
     const supabase = getSupabaseBrowserClient();
@@ -178,12 +269,32 @@ export default function StudyCoachPage() {
     }
   }
 
+  async function rateResponse(message: ChatMessage, feedback: "helpful" | "needs_work") {
+    if (!message.coachSubjectName || !message.topicLabel) return;
+    setMessages((prev) =>
+      prev.map((item) => (item.id === message.id ? { ...item, feedback } : item))
+    );
+    await persistCoachMemoryEntry({
+      subjectName: message.coachSubjectName,
+      topicLabel: message.topicLabel,
+      mode: message.coachMode ?? "chat",
+      summary: message.content.slice(0, 280),
+      feedback
+    });
+  }
+
   async function sendMessage(text: string) {
     const content = text.trim();
     if (!content || isStreaming) return;
 
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content };
-    const assistantMsg: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: "", streaming: true };
+    const assistantMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "",
+      streaming: true,
+      sourceTags: deriveSourceTags(grounding)
+    };
 
     // Fix 2: exclude local/streaming messages. Fix 4: cap to last 12. Fix 7: include plan summary.
     const history: ConversationMessage[] = [
@@ -237,12 +348,24 @@ export default function StudyCoachPage() {
         if (done) break;
         accumulated += decoder.decode(value, { stream: true });
         const snapshot = accumulated;
-        setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: snapshot } : m)));
+      setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: snapshot } : m)));
       }
 
-      setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, streaming: false } : m)));
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsg.id
+            ? {
+                ...m,
+                streaming: false,
+                coachSubjectName: activeSubject,
+                topicLabel: `${selectedSubject ? `${selectedSubject}: ` : ""}${content}`,
+                coachMode
+              }
+            : m
+        )
+      );
       await persistCoachMemoryEntry({
-        subjectName: selectedSubject || profile.subjects[0]?.name || "General",
+        subjectName: activeSubject,
         topicLabel: `${selectedSubject ? `${selectedSubject}: ` : ""}${content}`,
         mode: coachMode,
         question: content,
@@ -270,7 +393,8 @@ export default function StudyCoachPage() {
       id: crypto.randomUUID(),
       role: "assistant",
       content: "Generating your 7-day study plan...",
-      streaming: true
+      streaming: true,
+      sourceTags: deriveSourceTags(grounding)
     };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -319,7 +443,8 @@ export default function StudyCoachPage() {
       id: crypto.randomUUID(),
       role: "assistant",
       content: "Marking your answer...",
-      streaming: true
+      streaming: true,
+      sourceTags: deriveSourceTags(grounding)
     };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -355,13 +480,16 @@ export default function StudyCoachPage() {
                 ...m,
                 content: review.summary,
                 review,
-                streaming: false
+                streaming: false,
+                coachSubjectName: activeSubject,
+                topicLabel: `${selectedSubject ? `${selectedSubject}: ` : ""}${recentLabel}`,
+                coachMode: "markAnswer"
               }
             : m
         )
       );
       await persistCoachMemoryEntry({
-        subjectName: selectedSubject || profile.subjects[0]?.name || "General",
+        subjectName: activeSubject,
         topicLabel: `${selectedSubject ? `${selectedSubject}: ` : ""}${recentLabel}`,
         mode: "markAnswer",
         question: input.trim() || recentLabel,
@@ -383,6 +511,31 @@ export default function StudyCoachPage() {
     }
   }
 
+  function handleMessageAction(message: ChatMessage, action: "continue" | "simpler" | "practice" | "mark" | "switch") {
+    const topic = message.topicLabel || message.content.slice(0, 120);
+    if (action === "continue") {
+      setCoachMode(message.coachMode ?? "chat");
+      setInput(`Continue with ${topic}.`);
+      return;
+    }
+    if (action === "simpler") {
+      setCoachMode("explain");
+      setInput(`Explain ${topic} more simply with one worked example.`);
+      return;
+    }
+    if (action === "practice") {
+      setCoachMode("practice");
+      setInput(`Give me one more CAPS practice question on ${topic}.`);
+      return;
+    }
+    if (action === "mark") {
+      setCoachMode("markAnswer");
+      setInput(topic);
+      return;
+    }
+    setShowSubjectPicker(true);
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -398,11 +551,12 @@ export default function StudyCoachPage() {
     setCoachMode("chat");
     setAnswerDraft("");
     setInput("");
+    setShowSubjectPicker(false);
     setMessages([
       {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: "New conversation started. What would you like to work on?",
+        content: "New conversation started. Choose a subject and a mode, then ask the next CAPS topic.",
         isLocal: true
       }
     ]);
@@ -413,28 +567,16 @@ export default function StudyCoachPage() {
       <PageHeader title="AI Study Coach" eyebrow="CAPS-aligned">
         Ask any CAPS question. The coach explains concepts, creates practice questions, and builds study plans. Always verify official facts on source pages.
       </PageHeader>
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="flex flex-col">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Bot className="text-veld" size={20} />
-              <h2 className="text-xl font-black">Study Coach</h2>
-              <Badge tone={isDemo ? "sample" : "safe"}>{isDemo ? "Demo" : `Grade ${profile.grade}`}</Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              {profile.subjects.length > 0 && (
-                <select
-                  value={selectedSubject}
-                  onChange={(e) => setSelectedSubject(e.target.value)}
-                  className="focus-ring rounded-lg border border-ink/15 px-2 py-1.5 text-xs font-bold"
-                >
-                  {profile.subjects.map((s) => (
-                    <option key={s.name} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              )}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <Card className="flex min-h-[78vh] flex-col overflow-hidden p-0">
+          <div className="sticky top-0 z-20 border-b border-ink/10 bg-chalk/95 px-5 py-4 backdrop-blur">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Bot className="text-veld" size={20} />
+                <h2 className="text-xl font-black">Study Coach</h2>
+                <Badge tone={isDemo ? "sample" : "safe"}>{isDemo ? "Demo" : `Grade ${profile.grade}`}</Badge>
+                <Badge tone="neutral">{activeSubject}</Badge>
+              </div>
               <button
                 onClick={startNewConversation}
                 className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-ink/15 px-2 py-1.5 text-xs font-bold"
@@ -442,67 +584,173 @@ export default function StudyCoachPage() {
                 <RefreshCw size={12} /> New
               </button>
             </div>
+
+            <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-wrap gap-2">
+                {profile.subjects.length > 0 && (
+                  <select
+                    value={selectedSubject}
+                    onChange={(e) => setSelectedSubject(e.target.value)}
+                    className="focus-ring min-w-0 rounded-lg border border-ink/15 px-2 py-1.5 text-xs font-bold"
+                  >
+                    {profile.subjects.map((s) => (
+                      <option key={s.name} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Badge tone="sample">Mode: {coachMode}</Badge>
+                <Badge tone="neutral">Focus: {activeSubject}</Badge>
+                {sourceSummary ? <Badge tone="watch">{sourceSummary}</Badge> : null}
+              </div>
+            </div>
+
+            {showSubjectPicker && profile.subjects.length > 0 ? (
+              <div className="mt-3 rounded-xl border border-ink/10 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-black uppercase tracking-widest text-ink/45">Pick a subject</p>
+                  <button
+                    onClick={() => setShowSubjectPicker(false)}
+                    className="focus-ring rounded-full border border-ink/10 px-2.5 py-1 text-xs font-bold text-ink/60 hover:bg-chalk"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {profile.subjects.map((subject) => {
+                    const active = subject.name === selectedSubject;
+                    return (
+                      <button
+                        key={subject.name}
+                        onClick={() => {
+                          setSelectedSubject(subject.name);
+                          setInput(`Help me with ${subject.name} at Grade ${profile.grade} CAPS level.`);
+                          setShowSubjectPicker(false);
+                        }}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ${
+                          active ? "border-veld bg-veld/5" : "border-ink/10 bg-chalk hover:bg-white"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-bold">{subject.name}</p>
+                          <p className="text-[11px] text-ink/55">Mark {subject.currentMark}% • target {subject.targetMark}%</p>
+                        </div>
+                        {active ? <Badge tone="safe">Active</Badge> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {COACH_MODES.map((option) => {
+                const active = coachMode === option.mode;
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={option.mode}
+                    onClick={() => setCoachMode(option.mode)}
+                    className={`focus-ring inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black transition ${
+                      active ? "border-veld bg-veld text-white" : "border-ink/10 bg-white text-ink/70 hover:bg-chalk"
+                    }`}
+                  >
+                    <Icon size={12} />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-ink/55">
+              {coachMode === "chat" && "Ask naturally. The coach will explain, practise, or revise based on your prompt."}
+              {coachMode === "explain" && "Best for concepts, definitions, and worked examples."}
+              {coachMode === "practice" && "Best for exam-style questions and step-by-step solutions."}
+              {coachMode === "revise" && "Best for summaries, formulas, and common mistakes."}
+              {coachMode === "testMe" && "The coach will ask one question and wait for your attempt."}
+            </p>
+            <p className="mt-2 text-xs font-semibold text-ink/55">
+              {activeSubject} → {coachMode}
+            </p>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {COACH_MODES.map((option) => {
-              const active = coachMode === option.mode;
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.mode}
-                  onClick={() => setCoachMode(option.mode)}
-                  className={`focus-ring inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black transition ${
-                    active ? "border-veld bg-veld text-white" : "border-ink/10 bg-white text-ink/70 hover:bg-chalk"
-                  }`}
-                >
-                  <Icon size={12} />
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-2 text-xs text-ink/55">
-            {coachMode === "chat" && "Ask naturally. The coach will explain, practise, or revise based on your prompt."}
-            {coachMode === "explain" && "Best for concepts, definitions, and worked examples."}
-            {coachMode === "practice" && "Best for exam-style questions and step-by-step solutions."}
-            {coachMode === "revise" && "Best for summaries, formulas, and common mistakes."}
-            {coachMode === "testMe" && "The coach will ask one question and wait for your attempt."}
-          </p>
-
-          <div className="mt-4 min-h-96 max-h-[520px] flex-1 space-y-4 overflow-y-auto pr-1">
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} />
+              <MessageBubble key={msg.id} msg={msg} onRate={rateResponse} onAction={handleMessageAction} />
             ))}
             <div ref={endRef} />
           </div>
 
-          <div className="mt-4 flex items-end gap-2 border-t border-ink/10 pt-4">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isStreaming}
-              placeholder={
-                coachMode === "markAnswer"
-                  ? `Type the question or topic you want marked for ${selectedSubject || "your subject"}…`
-                  : `Ask about ${selectedSubject || "any CAPS topic"}… (Enter to send, Shift+Enter for new line)`
-              }
-              className="focus-ring min-h-12 flex-1 resize-none rounded-lg border border-ink/15 p-3 text-sm disabled:opacity-60"
-              rows={2}
-            />
-            <button
-              onClick={() => (coachMode === "markAnswer" ? reviewAnswer() : sendMessage(input))}
-              disabled={isStreaming || (coachMode === "markAnswer" ? !answerDraft.trim() : !input.trim())}
-              className="focus-ring flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-veld text-white disabled:opacity-60"
-            >
-              <Send size={18} />
-            </button>
+          <div className="sticky bottom-0 border-t border-ink/10 bg-white/95 px-5 py-4 backdrop-blur">
+            <div className="flex items-end gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isStreaming}
+                placeholder={
+                  coachMode === "markAnswer"
+                    ? `Type the question or topic you want marked for ${activeSubject}…`
+                    : `Ask about ${activeSubject}… (Enter to send, Shift+Enter for new line)`
+                }
+                className="focus-ring min-h-12 flex-1 resize-none rounded-lg border border-ink/15 p-3 text-sm disabled:opacity-60"
+                rows={2}
+              />
+              <button
+                onClick={() => (coachMode === "markAnswer" ? reviewAnswer() : sendMessage(input))}
+                disabled={isStreaming || (coachMode === "markAnswer" ? !answerDraft.trim() : !input.trim())}
+                className="focus-ring flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-veld text-white disabled:opacity-60"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              {QUICK_ACTIONS.map((action) => (
+                <button
+                  key={action.label}
+                  onClick={() =>
+                    action.onClick({
+                      coachMode,
+                      selectedSubject,
+                      setCoachMode,
+                      setSelectedSubject,
+                      setInput,
+                      openSubjectPicker: () => setShowSubjectPicker(true),
+                      profile
+                    })
+                  }
+                  className="focus-ring rounded-full border border-ink/10 bg-white px-3 py-1.5 font-semibold text-ink/70 hover:bg-chalk"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
           </div>
         </Card>
 
         <div className="space-y-4">
-          <Card>
+          <div className="flex gap-2 lg:hidden">
+            {[
+              { id: "progress" as const, label: "Progress" },
+              { id: "history" as const, label: "History" },
+              { id: "sources" as const, label: "Sources" }
+            ].map((tab) => {
+              const active = activePane === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActivePane(tab.id)}
+                  className={`focus-ring flex-1 rounded-lg px-3 py-2 text-xs font-black ${
+                    active ? "bg-veld text-white" : "border border-ink/10 bg-white text-ink/70"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <Card className={`${activePane !== "progress" ? "hidden lg:block" : ""}`}>
             <h2 className="text-lg font-black">Progress</h2>
             <div className="mt-3 grid grid-cols-3 gap-2">
               <div className="rounded-lg border border-ink/10 bg-chalk p-3">
@@ -534,8 +782,28 @@ export default function StudyCoachPage() {
             )}
           </Card>
 
+          <Card className={`${activePane !== "history" ? "hidden lg:block" : ""}`}>
+            <h2 className="text-lg font-black">Recent topics</h2>
+            <p className="mt-1 text-sm text-ink/65">Reuse what you were working on without typing it again.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {recentTopics.length > 0 ? (
+                recentTopics.map((topic) => (
+                  <button
+                    key={topic}
+                    onClick={() => setInput(topic)}
+                    className="focus-ring rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-chalk"
+                  >
+                    {topic.length > 36 ? `${topic.slice(0, 36)}…` : topic}
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-ink/45">No recent topics yet.</p>
+              )}
+            </div>
+          </Card>
+
           {coachMode === "markAnswer" ? (
-            <Card>
+            <Card className={`${activePane !== "progress" ? "hidden lg:block" : ""}`}>
               <h2 className="text-lg font-black">Mark my answer</h2>
               <p className="mt-1 text-sm text-ink/65">
                 Put the question or topic in the main box, paste your answer here, then ask the coach to mark it.
@@ -556,27 +824,7 @@ export default function StudyCoachPage() {
             </Card>
           ) : null}
 
-          <Card>
-            <h2 className="text-lg font-black">Recent topics</h2>
-            <p className="mt-1 text-sm text-ink/65">Reuse what you were working on without typing it again.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {recentTopics.length > 0 ? (
-                recentTopics.map((topic) => (
-                  <button
-                    key={topic}
-                    onClick={() => setInput(topic)}
-                    className="focus-ring rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-chalk"
-                  >
-                    {topic.length > 36 ? `${topic.slice(0, 36)}…` : topic}
-                  </button>
-                ))
-              ) : (
-                <p className="text-xs text-ink/45">No recent topics yet.</p>
-              )}
-            </div>
-          </Card>
-
-          <Card>
+          <Card className={`${activePane !== "history" ? "hidden lg:block" : ""}`}>
             <h2 className="text-lg font-black">Weak areas</h2>
             <p className="mt-1 text-sm text-ink/65">The coach keeps a running list of repeated topics that need revision.</p>
             <div className="mt-3 space-y-2">
@@ -589,6 +837,7 @@ export default function StudyCoachPage() {
                       onClick={() => {
                         setSelectedSubject(item.subjectName);
                         setInput(item.topicLabel);
+                        setActivePane("progress");
                       }}
                       className="flex w-full items-center justify-between rounded-lg border border-ink/10 px-3 py-2 text-left hover:bg-chalk"
                     >
@@ -610,7 +859,7 @@ export default function StudyCoachPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card className={`${activePane !== "sources" ? "hidden lg:block" : ""}`}>
             <h2 className="text-lg font-black">Your subjects</h2>
             <div className="mt-3 space-y-1.5">
               {profile.subjects.slice(0, 7).map((subject) => (
@@ -619,6 +868,7 @@ export default function StudyCoachPage() {
                   onClick={() => {
                     setSelectedSubject(subject.name);
                     setInput(`Explain the most important Grade ${profile.grade} CAPS concepts for ${subject.name}.`);
+                    setActivePane("progress");
                   }}
                   className="flex w-full items-center justify-between rounded-lg border border-ink/10 px-3 py-2 text-left text-sm hover:bg-chalk"
                 >
@@ -635,7 +885,7 @@ export default function StudyCoachPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card className={`${activePane !== "history" ? "hidden lg:block" : ""}`}>
             <h2 className="text-lg font-black">Quick prompts</h2>
             <div className="mt-3 space-y-1.5">
               {QUICK_PROMPTS.map((prompt) => (
@@ -650,7 +900,7 @@ export default function StudyCoachPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card className={`${activePane !== "progress" ? "hidden lg:block" : ""}`}>
             <h2 className="text-lg font-black">Study plan</h2>
             <p className="mt-1 text-sm text-ink/65">Generate a personalised 7-day plan based on your subjects and marks.</p>
             <button
@@ -665,13 +915,67 @@ export default function StudyCoachPage() {
           <div className="rounded-lg border border-protea/20 bg-protea/10 p-3 text-xs leading-5 text-ink/70">
             MatricSA uses stored reference data only. Official paper content, admission requirements, and bursary deadlines must be verified on the original source pages before any application or exam decision.
           </div>
+
+          <Card className={`${activePane !== "sources" ? "hidden lg:block" : ""}`}>
+            <h2 className="text-lg font-black">CAPS source pack</h2>
+            <p className="mt-1 text-sm text-ink/65">Official DBE curriculum and learner support material used by the coach.</p>
+            <div className="mt-3 space-y-2">
+              {capsContent.slice(0, 3).map((item) => (
+                <a
+                  key={`${item.title}-${item.subject}`}
+                  href={item.sourceUrl}
+                  target="_blank"
+                  className="block rounded-lg border border-ink/10 bg-white px-3 py-2 hover:bg-chalk"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold">{item.title}</p>
+                    <Badge tone="sample">{item.category}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-ink/60">
+                    {item.subject} {item.grade === "all" ? "" : `• Grade ${item.grade}`} • {item.summary}
+                  </p>
+                </a>
+              ))}
+              {capsSections.slice(0, 3).map((section) => (
+                <details key={`${section.sectionTitle}-${section.topic}`} className="rounded-lg border border-ink/10 bg-white px-3 py-2">
+                  <summary className="cursor-pointer list-none">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold">{section.sectionTitle}</p>
+                        <p className="mt-1 text-xs text-ink/55">{section.subject} {section.grade === "all" ? "" : `• Grade ${section.grade}`} • {section.topic}</p>
+                      </div>
+                      <Badge tone="watch">{section.sourceType}</Badge>
+                    </div>
+                  </summary>
+                  <p className="mt-3 text-sm leading-6 text-ink/70">{section.sectionSummary}</p>
+                  <p className="mt-2 text-sm leading-6 text-ink/80">{section.sectionText}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {section.keywords.slice(0, 4).map((keyword) => (
+                      <Badge key={keyword} tone="neutral">{keyword}</Badge>
+                    ))}
+                  </div>
+                  <a href={section.sourceUrl} target="_blank" className="focus-ring mt-3 inline-flex items-center gap-1 text-xs font-black text-veld">
+                    Open source <span aria-hidden="true">↗</span>
+                  </a>
+                </details>
+              ))}
+            </div>
+          </Card>
         </div>
       </div>
     </AppShell>
   );
 }
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  onRate,
+  onAction
+}: {
+  msg: ChatMessage;
+  onRate: (message: ChatMessage, feedback: "helpful" | "needs_work") => Promise<void>;
+  onAction: (message: ChatMessage, action: "continue" | "simpler" | "practice" | "mark" | "switch") => void;
+}) {
   if (msg.role === "user") {
     return (
       <div className="flex justify-end">
@@ -680,12 +984,19 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
     );
   }
 
+  const toneClass =
+    msg.review ? "border-amber-200 bg-amber-50/90" : msg.coachMode === "practice" ? "border-sky-200 bg-sky-50/80" : msg.coachMode === "revise" ? "border-veld/20 bg-veld/5" : "border-ink/10 bg-white";
+
   return (
     <div className="flex items-start gap-3">
       <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-ink text-white">
         <Bot size={14} />
       </div>
-      <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-ink/10 bg-white px-4 py-3">
+      <div className={`min-w-0 flex-1 rounded-2xl rounded-tl-sm border px-4 py-3 ${toneClass}`}>
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-bold text-ink/45">
+          {msg.coachMode ? <Badge tone="neutral">Mode: {msg.coachMode}</Badge> : null}
+          {msg.topicLabel ? <span className="truncate">Topic: {msg.topicLabel}</span> : null}
+        </div>
         {msg.streaming && !msg.content ? (
           <p className="animate-pulse text-sm text-ink/50">Thinking…</p>
         ) : msg.plan ? (
@@ -698,6 +1009,58 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             {msg.streaming ? <span className="animate-pulse font-mono text-veld">▌</span> : null}
           </>
         )}
+        {msg.sourceTags?.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {msg.sourceTags.map((tag) => (
+              <Badge key={tag} tone="neutral">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        {!msg.streaming && msg.role === "assistant" ? (
+          <div className="mt-3 border-t border-ink/10 pt-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-ink/45">Was this helpful?</span>
+            <button
+              onClick={() => onRate(msg, "helpful")}
+              disabled={msg.feedback === "helpful"}
+              className={`focus-ring inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-bold ${
+                msg.feedback === "helpful" ? "border-veld bg-veld text-white" : "border-ink/10 text-ink/60 hover:bg-chalk"
+              }`}
+            >
+              <CheckCircle2 size={12} /> Helpful
+            </button>
+            <button
+              onClick={() => onRate(msg, "needs_work")}
+              disabled={msg.feedback === "needs_work"}
+              className={`focus-ring inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-bold ${
+                msg.feedback === "needs_work" ? "border-protea bg-protea text-white" : "border-ink/10 text-ink/60 hover:bg-chalk"
+              }`}
+            >
+              <Flame size={12} /> Needs work
+            </button>
+              {msg.coachMode ? <span className="ml-auto text-ink/40">Mode: {msg.coachMode}</span> : null}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button onClick={() => onAction(msg, "continue")} className="focus-ring rounded-full border border-ink/10 px-2.5 py-1 font-bold text-ink/60 hover:bg-chalk">
+                Continue topic
+              </button>
+              <button onClick={() => onAction(msg, "simpler")} className="focus-ring rounded-full border border-ink/10 px-2.5 py-1 font-bold text-ink/60 hover:bg-chalk">
+                Explain simpler
+              </button>
+              <button onClick={() => onAction(msg, "practice")} className="focus-ring rounded-full border border-ink/10 px-2.5 py-1 font-bold text-ink/60 hover:bg-chalk">
+                Another question
+              </button>
+              <button onClick={() => onAction(msg, "mark")} className="focus-ring rounded-full border border-ink/10 px-2.5 py-1 font-bold text-ink/60 hover:bg-chalk">
+                Mark my answer
+              </button>
+              <button onClick={() => onAction(msg, "switch")} className="focus-ring rounded-full border border-ink/10 px-2.5 py-1 font-bold text-ink/60 hover:bg-chalk">
+                Switch subject
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -719,6 +1082,39 @@ function PlanView({ content, tasks }: { content: string; tasks: StudyTask[] }) {
       </div>
     </>
   );
+}
+
+function buildSourceSummary(grounding: {
+  apsRules?: unknown[];
+  bursaries?: unknown[];
+  pastPaperQuestions?: unknown[];
+  capsContent?: unknown[];
+  capsSections?: unknown[];
+}) {
+  const parts = [
+    grounding.capsSections && Array.isArray(grounding.capsSections) && grounding.capsSections.length > 0 ? "CAPS" : null,
+    grounding.capsContent && Array.isArray(grounding.capsContent) && grounding.capsContent.length > 0 ? "DBE" : null,
+    grounding.pastPaperQuestions && Array.isArray(grounding.pastPaperQuestions) && grounding.pastPaperQuestions.length > 0 ? "Past papers" : null,
+    grounding.apsRules && Array.isArray(grounding.apsRules) && grounding.apsRules.length > 0 ? "APS" : null,
+    grounding.bursaries && Array.isArray(grounding.bursaries) && grounding.bursaries.length > 0 ? "Bursaries" : null
+  ].filter((item): item is string => Boolean(item));
+
+  return parts.length > 0 ? parts.join(" • ") : "";
+}
+
+function deriveSourceTags(grounding: {
+  apsRules?: unknown[];
+  bursaries?: unknown[];
+  pastPaperQuestions?: unknown[];
+  capsContent?: unknown[];
+  capsSections?: unknown[];
+}) {
+  return [
+    grounding.capsSections && Array.isArray(grounding.capsSections) && grounding.capsSections.length > 0 ? "CAPS" : null,
+    grounding.capsContent && Array.isArray(grounding.capsContent) && grounding.capsContent.length > 0 ? "DBE" : null,
+    grounding.pastPaperQuestions && Array.isArray(grounding.pastPaperQuestions) && grounding.pastPaperQuestions.length > 0 ? "Past papers" : null,
+    grounding.apsRules && Array.isArray(grounding.apsRules) && grounding.apsRules.length > 0 ? "APS" : null
+  ].filter((item): item is string => Boolean(item));
 }
 
 function ReviewView({ content, review }: { content: string; review: AnswerReview }) {

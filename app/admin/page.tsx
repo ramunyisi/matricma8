@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookPlus, Database, GraduationCap, ListPlus, RefreshCw, Upload } from "lucide-react";
+import { BookPlus, Database, FileText, GraduationCap, ListPlus, RefreshCw, Upload } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -165,6 +165,34 @@ export default function AdminPage() {
     }
   }
 
+  async function submitCapsUpload(form: FormData) {
+    setIsSaving(true);
+    setMessage("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Login required.");
+
+      const response = await fetch("/api/admin/caps-content", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: form
+      });
+      const result = await readResponseJson(response);
+      if (!response.ok) throw new Error(result.error ?? "CAPS upload failed.");
+      setMessage(`CAPS PDF uploaded and ${result.data.sectionsImported} chunk(s) imported.`);
+      await refreshOptions();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not upload CAPS PDF.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <AppShell>
       <PageHeader title="Teacher/Admin Portal" eyebrow="Verified content operations">
@@ -181,10 +209,25 @@ export default function AdminPage() {
         </AdminForm>
 
         <AdminForm title="Bulk import content" icon={<RefreshCw />} badge="bulk import" disabled={isSaving} onSubmit={submitBulkImport}>
-          <Select name="bulkType" label="Import type" options={["apsRules", "bursaries", "paperDirectories"]} defaultValue="apsRules" />
+          <Select name="bulkType" label="Import type" options={["apsRules", "bursaries", "paperDirectories", "capsSections"]} defaultValue="apsRules" />
           <Textarea name="bulkPayload" label="Payload" defaultValue={bulkExample("apsRules")} />
           <div className="rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/65 sm:col-span-2">
-            Paste JSON arrays for APS rules or bursaries. For paper directories, paste one DBE directory URL per line or a JSON array of objects with `directoryUrl`, `maxCollections`, and optional `grades`.
+            Paste JSON arrays for APS rules, bursaries, or CAPS sections. For paper directories, paste one DBE directory URL per line or a JSON array of objects with `directoryUrl`, `maxCollections`, and optional `grades`.
+          </div>
+        </AdminForm>
+
+        <AdminForm title="Upload CAPS PDF and auto-chunk it" icon={<FileText />} badge="CAPS ingest" disabled={isSaving} onSubmit={submitCapsUpload}>
+          <Select name="subject" label="Subject" options={[...new Set(subjects.map((subject) => subject.name))]} defaultValue="Life Sciences" />
+          <Select name="grade" label="Grade" options={["10", "11", "12", "all"]} defaultValue="12" />
+          <Input name="term" label="Term (optional)" type="number" />
+          <Input name="topicHint" label="Topic hint (optional)" defaultValue="DNA and genetics" />
+          <Select name="sourceType" label="Source type" options={["mind-the-gap", "caps", "workbook", "digital"]} defaultValue="mind-the-gap" />
+          <Input name="sourceTitle" label="Source title" defaultValue="Grade 12 Life Sciences Mind the Gap" />
+          <Input name="sourceUrl" label="Source URL" defaultValue="https://www.education.gov.za/Curriculum/LearningandTeachingSupportMaterials%28LTSM%29/MindtheGapStudyGuides.aspx" />
+          <FileInput name="capsPdf" label="CAPS PDF" />
+          <Textarea name="capsSections" label="Chunk JSON override (optional)" defaultValue={capsExample()} />
+          <div className="rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/65 sm:col-span-2">
+            Leave the JSON blank to auto-extract and chunk the PDF server-side. Paste JSON only if you want to override the extractor for a scanned file or a hand-tuned import.
           </div>
         </AdminForm>
 
@@ -391,6 +434,27 @@ function numberValue(form: FormData, key: string) {
   return Number.isFinite(number) ? number : undefined;
 }
 
+function optionalNumberValue(form: FormData, key: string) {
+  const raw = String(form.get(key) ?? "").trim();
+  if (!raw) return undefined;
+  const number = Number(raw);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+async function readResponseJson(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text || "Unexpected server response." };
+  }
+}
+
 function listValue(form: FormData, key: string) {
   return value(form, key).split(",").map((item) => item.trim()).filter(Boolean);
 }
@@ -454,6 +518,28 @@ function bulkExample(type: string) {
     return "https://www.education.gov.za/Curriculum/NationalSeniorCertificate(NSC)Examinations.aspx";
   }
 
+  if (type === "capsSections") {
+    return JSON.stringify([
+      {
+        subject: "Mathematics",
+        grade: 12,
+        term: 1,
+        topic: "Functions",
+        sectionTitle: "Functions and graphs",
+        sectionSummary: "DBE Mind the Gap summary for Grade 12 Mathematics.",
+        sectionText: "Write the function, identify the domain, range, intercepts, and transformations, then answer in exam style.",
+        sourceType: "mind-the-gap",
+        sourceTitle: "Grade 12 Mathematics Mind the Gap",
+        sourceUrl: "https://www.education.gov.za/Curriculum/LearningandTeachingSupportMaterials%28LTSM%29/MindtheGapStudyGuides.aspx",
+        pageStart: 1,
+        pageEnd: 8,
+        keywords: ["functions", "graphs"],
+        version: 1,
+        lastVerifiedAt: "2026-06-10"
+      }
+    ], null, 2);
+  }
+
   return JSON.stringify([
     {
       institutionName: "Example University",
@@ -464,6 +550,28 @@ function bulkExample(type: string) {
       lastVerifiedAt: "2026-06-09",
       prospectusUrl: "https://example.edu/prospectus.pdf",
       prospectusNotes: ["Example prospectus note."]
+    }
+  ], null, 2);
+}
+
+function capsExample() {
+  return JSON.stringify([
+    {
+      subject: "Life Sciences",
+      grade: 12,
+      term: 1,
+      topic: "DNA and genetics",
+      sectionTitle: "DNA, meiosis, and chromosome behaviour",
+      sectionSummary: "Connect DNA structure to meiosis and explain variation.",
+      sectionText: "Describe the role of DNA, chromosomes, and genes before explaining how meiosis produces variation.",
+      sourceType: "mind-the-gap",
+      sourceTitle: "Grade 12 Life Sciences Mind the Gap",
+      sourceUrl: "https://www.education.gov.za/Curriculum/LearningandTeachingSupportMaterials%28LTSM%29/MindtheGapStudyGuides.aspx",
+      pageStart: 1,
+      pageEnd: 14,
+      keywords: ["dna", "meiosis", "chromosomes", "variation"],
+      version: 1,
+      lastVerifiedAt: "2026-06-10"
     }
   ], null, 2);
 }

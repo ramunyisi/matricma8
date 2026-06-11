@@ -14,7 +14,8 @@ describe("coach helper logic", () => {
   it("includes the selected mode in instructions", () => {
     const instructions = buildCoachInstructions("practice", "Mathematics");
     expect(instructions).toContain("Current coaching mode: practice.");
-    expect(instructions).toContain("Focus on Mathematics");
+    expect(instructions).toContain("The learner's current subject is Mathematics.");
+    expect(instructions).toContain("Do not treat Mathematics as the default subject.");
     expect(instructions).toContain("practice question");
   });
 });

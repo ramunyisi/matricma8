@@ -29,6 +29,7 @@ export async function recordCoachMemory(
     answer?: string;
     summary?: string;
     review?: AnswerReview | null;
+    feedback?: "helpful" | "needs_work";
   }
 ) {
   const topicKey = deriveCoachTopicKey(payload.subjectName, payload.topicLabel);
@@ -46,6 +47,7 @@ export async function recordCoachMemory(
   const current = existing ? mapMemoryRow(existing) : null;
   const now = new Date().toISOString();
   const review = payload.review ?? null;
+  const feedbackImpact = getFeedbackImpact(payload.feedback);
   const isReviewMode = payload.mode === "markAnswer";
   const inferredStruggle = review ? Math.max(1, Math.min(5, Math.round(review.likelyMarksLost))) : isReviewMode ? 1 : 0;
   const inferredSuccess = review
@@ -63,8 +65,8 @@ export async function recordCoachMemory(
     topic_label: payload.topicLabel,
     session_count: (current?.sessionCount ?? 0) + 1,
     question_count: (current?.questionCount ?? 0) + (payload.question ? 1 : 0),
-    struggle_count: (current?.struggleCount ?? 0) + inferredStruggle,
-    success_count: (current?.successCount ?? 0) + inferredSuccess,
+    struggle_count: (current?.struggleCount ?? 0) + inferredStruggle + feedbackImpact.struggleDelta,
+    success_count: (current?.successCount ?? 0) + inferredSuccess + feedbackImpact.successDelta,
     last_mode: payload.mode,
     last_summary: payload.summary ?? review?.summary ?? current?.lastSummary ?? null,
     last_question: payload.question ?? current?.lastQuestion ?? null,
@@ -85,6 +87,16 @@ export function deriveCoachTopicKey(subjectName: string, topicLabel: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 120);
+}
+
+export function getFeedbackImpact(feedback?: "helpful" | "needs_work") {
+  if (feedback === "helpful") {
+    return { successDelta: 1, struggleDelta: 0 };
+  }
+  if (feedback === "needs_work") {
+    return { successDelta: 0, struggleDelta: 2 };
+  }
+  return { successDelta: 0, struggleDelta: 0 };
 }
 
 export function sortCoachMemory(memory: CoachTopicMemory[]) {

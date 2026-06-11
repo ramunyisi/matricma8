@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import type { Bursary, LearnerProfile, LearnerSubject, PastPaperQuestion } from "@/lib/types";
+import type { Bursary, CapsContentSection, LearnerProfile, LearnerSubject, PastPaperQuestion } from "@/lib/types";
 import { matchBursaries } from "@/lib/bursaries";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { predictRisk as localPredictRisk } from "@/lib/aps";
@@ -26,7 +26,11 @@ Always distinguish prediction from confirmed results.
 When official data is missing or unverified, say it needs verification from stored source URLs or official institution/provider pages.
 For learners under 18, encourage parent/guardian support for accounts, bursary applications, and sensitive decisions.
 
-You are a Grade 12 Mathematics tutor following the South African CAPS curriculum.
+You are a Grade 12 CAPS tutor for the learner's current subject.
+Never assume Mathematics unless the learner explicitly asks for Mathematics.
+If a subject is provided, stay on that subject and use its exam terminology.
+When answering, keep the structure visible to the learner: start with the direct answer, then a short explanation, then one worked or check example where useful, then one next step.
+When source labels or stored reference data are relevant, mention them briefly and clearly so the learner knows what was grounded.
 
 Always:
 - Explain concepts simply
@@ -43,6 +47,7 @@ export type AiGroundingContext = {
   apsRules?: unknown[];
   bursaries?: unknown[];
   pastPaperQuestions?: unknown[];
+  capsSections?: unknown[];
   coachMemory?: unknown[];
 };
 
@@ -58,14 +63,20 @@ export function shouldAskForClarification(prompt: string, focusSubject?: string)
 }
 
 export function buildCoachInstructions(mode: CoachMode, focusSubject?: string) {
-  const subjectLine = focusSubject ? `Focus on ${focusSubject} unless the learner asks for another subject.` : "";
+  const subjectLine = focusSubject
+    ? [
+        `The learner's current subject is ${focusSubject}.`,
+        `Use ${focusSubject} terminology and examples unless the learner explicitly switches to another subject.`,
+        `Do not treat Mathematics as the default subject.`
+      ].join("\n")
+    : "Use the subject named by the learner. Do not assume Mathematics as a default.";
   const modeInstructions: Record<CoachMode, string> = {
-    chat: "Answer naturally and keep the tone supportive.",
-    explain: "Teach the concept clearly, then show one worked example and one quick check question.",
+    chat: "Answer naturally and keep the tone supportive. End with one clear next step.",
+    explain: "Teach the concept clearly, then show one worked example and one quick check question. Keep the structure short and visible.",
     practice: "Set one CAPS-aligned practice question first, then give a step-by-step solution and a short note on the exam method.",
     revise: "Give a compact revision summary, key formulas or facts, common mistakes, and a short memory aid.",
     testMe: "Ask one exam-style question only. Do not solve it unless the learner asks for the answer after trying.",
-    markAnswer: "Assess the learner's answer, identify what is correct, where marks are lost, and how to improve. Do not just restate the full solution."
+    markAnswer: "Assess the learner's answer, identify what is correct, where marks are lost, and how to improve. Show likely marks earned, then one corrected version."
   };
 
   return [
@@ -73,6 +84,7 @@ export function buildCoachInstructions(mode: CoachMode, focusSubject?: string) {
     modeInstructions[mode],
     subjectLine,
     "If the prompt is vague or missing the topic, ask one short clarifying question instead of guessing.",
+    "If the learner mentions a subject in the latest message, prioritize that subject over any previous default.",
     "If grounding data is available, use it cautiously and label it as stored reference data rather than an official source unless it is explicitly official."
   ]
     .filter(Boolean)
@@ -107,6 +119,30 @@ function buildMemoryGuidance(memory: unknown): string {
     "Start your response by addressing the strongest weak area first.",
     "If the learner is asking for practice, give one short drill that targets that weak area.",
     "If the learner is asking for revision, give the key rule/formula for that weak area before anything else."
+  ].join("\n");
+}
+
+function buildCapsGuidance(sections: unknown): string {
+  if (!Array.isArray(sections) || sections.length === 0) return "";
+  const items = sections
+    .slice(0, 4)
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const typed = item as Partial<CapsContentSection>;
+      if (!typed.sectionTitle || !typed.sectionSummary || !typed.sourceUrl) return null;
+      const subject = typed.subject ?? "All subjects";
+      const grade = typed.grade === "all" || typeof typed.grade === "undefined" ? "all" : `Grade ${typed.grade}`;
+      return `- ${typed.sectionTitle} (${subject}, ${grade}): ${typed.sectionSummary} [${typed.sourceUrl}]`;
+    })
+    .filter((item): item is string => Boolean(item));
+
+  if (items.length === 0) return "";
+  return [
+    "CAPS sections available for direct grounding:",
+    ...items,
+    "Use these sections before general reasoning.",
+    "Cite the source URL in plain text when referencing a specific rule or section.",
+    "If no section matches, say the CAPS layer did not contain a verified match."
   ].join("\n");
 }
 
@@ -219,6 +255,10 @@ export async function* streamCoachResponse(
   }
   if (grounding) {
     contextPrefix += `Reference data: ${JSON.stringify(grounding)}\n\n`;
+  }
+  const capsGuidance = buildCapsGuidance(grounding?.capsSections);
+  if (capsGuidance) {
+    contextPrefix += `${capsGuidance}\n\n`;
   }
   const memoryGuidance = buildMemoryGuidance(grounding?.coachMemory);
   if (memoryGuidance) {

@@ -137,6 +137,35 @@ export type PastPaper = {
   sampleData?: boolean;
 };
 
+export type CapsContentItem = {
+  subject: string;
+  grade: "all" | 10 | 11 | 12;
+  category: "CAPS policy" | "Mind the Gap" | "Workbooks" | "Digital content";
+  title: string;
+  summary: string;
+  sourceUrl: string;
+  tags: string[];
+};
+
+export type CapsContentSection = {
+  id?: string;
+  subject: string;
+  grade: "all" | 10 | 11 | 12;
+  term?: number;
+  topic: string;
+  sectionTitle: string;
+  sectionSummary: string;
+  sectionText: string;
+  sourceType: "caps" | "mind-the-gap" | "workbook" | "digital";
+  sourceTitle: string;
+  sourceUrl: string;
+  pageStart?: number;
+  pageEnd?: number;
+  keywords: string[];
+  version: number;
+  lastVerifiedAt?: string;
+};
+
 export type StudyTask = {
   id?: string;
   day: string;

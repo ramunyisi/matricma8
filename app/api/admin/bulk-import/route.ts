@@ -44,10 +44,29 @@ const paperDirectorySchema = z.object({
   grades: z.array(z.number().int().min(10).max(12)).default([])
 });
 
+const capsSectionSchema = z.object({
+  subject: z.string().min(1),
+  grade: z.union([z.literal("all"), z.number().int().min(10).max(12)]).default("all"),
+  term: z.number().int().min(1).max(4).optional(),
+  topic: z.string().min(1),
+  sectionTitle: z.string().min(1),
+  sectionSummary: z.string().min(1),
+  sectionText: z.string().min(1),
+  sourceType: z.enum(["caps", "mind-the-gap", "workbook", "digital"]).default("mind-the-gap"),
+  sourceTitle: z.string().min(1),
+  sourceUrl: z.string().url(),
+  pageStart: z.number().int().min(1).optional(),
+  pageEnd: z.number().int().min(1).optional(),
+  keywords: z.array(z.string()).default([]),
+  version: z.number().int().min(1).default(1),
+  lastVerifiedAt: z.string().optional()
+});
+
 const requestSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("apsRules"), items: z.array(apsRuleSchema).min(1) }),
   z.object({ type: z.literal("bursaries"), items: z.array(bursarySchema).min(1) }),
-  z.object({ type: z.literal("paperDirectories"), items: z.array(paperDirectorySchema).min(1) })
+  z.object({ type: z.literal("paperDirectories"), items: z.array(paperDirectorySchema).min(1) }),
+  z.object({ type: z.literal("capsSections"), items: z.array(capsSectionSchema).min(1) })
 ]);
 
 export async function POST(request: Request) {
@@ -72,6 +91,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ data: { type: body.type, summaries } });
   }
 
+  if (body.type === "capsSections") {
+    const results = [];
+    for (const item of body.items) {
+      const result = await upsertCapsSection(auth.admin, item);
+      if (result.error) {
+        return NextResponse.json({ error: result.error.message }, { status: 400 });
+      }
+      results.push(result.data);
+    }
+    return NextResponse.json({ data: { type: body.type, count: results.length, results } });
+  }
+
   const results = [];
   for (const item of body.items) {
     const result = await upsertItem(auth.admin, body.type, item);
@@ -82,6 +113,31 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ data: { type: body.type, count: results.length, results } });
+}
+
+async function upsertCapsSection(
+  admin: SupabaseClient,
+  item: z.infer<typeof capsSectionSchema>
+) {
+  const payload = {
+    subject: item.subject,
+    grade: item.grade === "all" ? null : item.grade,
+    term: item.term ?? null,
+    topic: item.topic,
+    section_title: item.sectionTitle,
+    section_summary: item.sectionSummary,
+    section_text: item.sectionText,
+    source_type: item.sourceType,
+    source_title: item.sourceTitle,
+    source_url: item.sourceUrl,
+    page_start: item.pageStart ?? null,
+    page_end: item.pageEnd ?? null,
+    keywords: item.keywords,
+    version: item.version,
+    last_verified_at: item.lastVerifiedAt
+  };
+
+  return admin.from("caps_content_sections").upsert(payload, { onConflict: "source_url,section_title,version" }).select().single();
 }
 
 async function upsertItem(

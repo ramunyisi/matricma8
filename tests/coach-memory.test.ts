@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveCoachTopicKey, sortCoachMemory } from "@/lib/coach-memory";
+import { deriveCoachTopicKey, getFeedbackImpact, sortCoachMemory } from "@/lib/coach-memory";
 
 describe("coach memory", () => {
   it("creates stable topic keys", () => {
@@ -39,5 +39,10 @@ describe("coach memory", () => {
     ]);
 
     expect(sorted[0].topicKey).toBe("maths-b");
+  });
+
+  it("maps feedback to memory deltas", () => {
+    expect(getFeedbackImpact("helpful")).toEqual({ successDelta: 1, struggleDelta: 0 });
+    expect(getFeedbackImpact("needs_work")).toEqual({ successDelta: 0, struggleDelta: 2 });
   });
 });

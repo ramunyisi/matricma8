@@ -95,6 +95,36 @@ create table public.coach_topic_memory (
   unique (learner_id, topic_key)
 );
 
+create table public.whatsapp_sessions (
+  phone text primary key,
+  learner_id uuid references public.learner_profiles(id) on delete set null,
+  messages_json jsonb not null default '[]',
+  active_subject_name text,
+  updated_at timestamptz not null default now()
+);
+
+create table public.caps_content_sections (
+  id uuid primary key default gen_random_uuid(),
+  subject text not null,
+  grade int check (grade in (10, 11, 12)),
+  term int check (term in (1, 2, 3, 4)),
+  topic text not null,
+  section_title text not null,
+  section_summary text not null,
+  section_text text not null,
+  source_type text not null check (source_type in ('caps', 'mind-the-gap', 'workbook', 'digital')),
+  source_title text not null,
+  source_url text not null,
+  page_start int,
+  page_end int,
+  keywords text[] not null default '{}',
+  version int not null default 1,
+  last_verified_at date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (source_url, section_title, version)
+);
+
 create table public.marks (
   id uuid primary key default gen_random_uuid(),
   learner_id uuid not null references public.learner_profiles(id) on delete cascade,

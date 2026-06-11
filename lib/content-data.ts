@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ApsRule, Bursary, PastPaper, PastPaperQuestion } from "@/lib/types";
+import type { ApsRule, Bursary, CapsContentItem, CapsContentSection, PastPaper, PastPaperQuestion } from "@/lib/types";
 import { sampleApsRules, sampleQuestions } from "@/lib/sample-data";
 import { verifiedBursaries } from "@/lib/bursary-directory";
+import { capsContentLibrary, capsContentSections } from "@/lib/caps-content";
 
 export async function loadApsRules(supabase: SupabaseClient | null): Promise<ApsRule[]> {
   if (!supabase) return sampleApsRules;
@@ -210,6 +211,14 @@ export async function loadPastPaperQuestions(supabase: SupabaseClient | null): P
     .filter((question): question is PastPaperQuestion => Boolean(question));
 
   return mapped;
+}
+
+export async function loadCapsContent(): Promise<CapsContentItem[]> {
+  return capsContentLibrary;
+}
+
+export async function loadCapsSections(): Promise<CapsContentSection[]> {
+  return capsContentSections;
 }
 
 function samplePastPapers(): PastPaper[] {

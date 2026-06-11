@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { capsContentSections } from "@/lib/caps-content";
 import { sampleApsRules, sampleSubjects } from "@/lib/sample-data";
 import { verifiedBursaries } from "@/lib/bursary-directory";
 
@@ -59,7 +60,31 @@ async function main() {
     )
   );
 
-  console.log("Seeded MatricSA sample subjects, APS rules, and verified bursaries.");
+  await assertOk(
+    "caps_content_sections",
+    supabase.from("caps_content_sections").upsert(
+      capsContentSections.map((section) => ({
+        subject: section.subject,
+        grade: section.grade === "all" ? null : section.grade,
+        term: section.term ?? null,
+        topic: section.topic,
+        section_title: section.sectionTitle,
+        section_summary: section.sectionSummary,
+        section_text: section.sectionText,
+        source_type: section.sourceType,
+        source_title: section.sourceTitle,
+        source_url: section.sourceUrl,
+        page_start: section.pageStart ?? null,
+        page_end: section.pageEnd ?? null,
+        keywords: section.keywords,
+        version: section.version,
+        last_verified_at: section.lastVerifiedAt ?? null
+      })),
+      { onConflict: "source_url,section_title,version" }
+    )
+  );
+
+  console.log("Seeded MatricSA sample subjects, APS rules, verified bursaries, and CAPS content sections.");
 }
 
 async function assertOk(label: string, promise: PromiseLike<{ error: unknown }>) {

@@ -1,7 +1,9 @@
 import { createHmac } from "crypto";
 import { getServiceSupabase } from "@/lib/auth-server";
 import { streamCoachResponse, type ConversationMessage } from "@/lib/ai";
+import { getCapsSectionsForCoach, summarizeCapsContentForPrompt } from "@/lib/caps-content";
 import { loadCoachMemory, recordCoachMemory, summarizeCoachMemory } from "@/lib/coach-memory";
+import { inferCoachSubjectName } from "@/lib/coach-subject";
 import { normalizeWhatsappPhone } from "@/lib/whatsapp-reminders";
 import type { LearnerProfile } from "@/lib/types";
 
@@ -79,11 +81,16 @@ export async function POST(request: Request) {
   const messages: ConversationMessage[] = [...previousMessages, { role: "user", content: messageText }];
   const profile = learnerRow ? mapToProfile(learnerRow) : null;
   const coachMemory = learnerRow ? await loadCoachMemory(supabase, learnerRow.id, 8).catch(() => []) : [];
-  const grounding = coachMemory.length > 0 ? { coachMemory: summarizeCoachMemory(coachMemory) } : undefined;
+  const activeSubject = inferCurrentSubject(profile, sessionRow?.active_subject_name ?? null, messageText);
+  const grounding = {
+    ...(coachMemory.length > 0 ? { coachMemory: summarizeCoachMemory(coachMemory) } : {}),
+    capsContent: summarizeCapsContentForPrompt(activeSubject, profile?.grade),
+    capsSections: getCapsSectionsForCoach(activeSubject, profile?.grade, messageText)
+  };
 
   let aiResponse = "";
   try {
-    for await (const chunk of streamCoachResponse(messages, profile, grounding, "whatsapp")) {
+    for await (const chunk of streamCoachResponse(messages, profile, grounding, "whatsapp", activeSubject)) {
       aiResponse += chunk;
     }
   } catch {
@@ -101,10 +108,10 @@ export async function POST(request: Request) {
     ...messages,
     { role: "assistant" as const, content: aiResponse }
   ].slice(-MAX_HISTORY_MESSAGES);
-  await upsertSession(supabase, phone, learnerRow?.id ?? null, updatedMessages);
+  await upsertSession(supabase, phone, learnerRow?.id ?? null, updatedMessages, activeSubject);
   if (learnerRow) {
     await recordCoachMemory(supabase, learnerRow.id, {
-      subjectName: inferCoachSubject(profile, messageText),
+      subjectName: activeSubject,
       topicLabel: messageText.slice(0, 120),
       mode: "chat",
       question: messageText,
@@ -212,6 +219,7 @@ type SessionRow = {
   phone: string;
   learner_id: string | null;
   messages_json: ConversationMessage[];
+  active_subject_name: string | null;
   updated_at: string;
 };
 
@@ -242,12 +250,19 @@ async function upsertSession(
   supabase: ReturnType<typeof getServiceSupabase>,
   phone: string,
   learnerId: string | null,
-  messages: ConversationMessage[]
+  messages: ConversationMessage[],
+  activeSubjectName: string
 ): Promise<void> {
   await supabase
     .from("whatsapp_sessions")
     .upsert(
-      { phone, learner_id: learnerId, messages_json: messages, updated_at: new Date().toISOString() },
+      {
+        phone,
+        learner_id: learnerId,
+        messages_json: messages,
+        active_subject_name: activeSubjectName,
+        updated_at: new Date().toISOString()
+      },
       { onConflict: "phone" }
     );
 }
@@ -281,9 +296,9 @@ function mapToProfile(row: LearnerRow): LearnerProfile {
   };
 }
 
-function inferCoachSubject(profile: LearnerProfile | null, messageText: string) {
-  if (!profile) return "General";
-  const lower = messageText.toLowerCase();
-  const match = profile.subjects.find((subject) => lower.includes(subject.name.toLowerCase()));
-  return match?.name ?? profile.subjects[0]?.name ?? "General";
+function inferCurrentSubject(profile: LearnerProfile | null, currentSubject: string | null, messageText: string) {
+  if (!profile) return currentSubject ?? "General";
+  const inferred = inferCoachSubjectName(profile.subjects, messageText, currentSubject ?? "");
+  if (inferred && inferred !== "General") return inferred;
+  return currentSubject ?? profile.subjects[0]?.name ?? "General";
 }
