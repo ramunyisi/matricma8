@@ -702,6 +702,54 @@ export default function StudyCoachPage() {
             </p>
           </div>
 
+          {messages.length === 1 ? (
+            <div className="border-y border-ink/10 bg-white px-5 py-4">
+              <p className="text-xs font-black uppercase tracking-widest text-ink/45">Quick start</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <button
+                  onClick={() => {
+                    setCoachMode("explain");
+                    setInput(`Explain the most important Grade ${profile.grade} CAPS concepts for ${activeSubject}.`);
+                  }}
+                  className="rounded-xl border border-ink/10 bg-chalk p-3 text-left hover:bg-white"
+                >
+                  <p className="text-sm font-black">Explain this subject</p>
+                  <p className="mt-1 text-xs text-ink/60">Get a simple CAPS overview with an example.</p>
+                </button>
+                <button
+                  onClick={() => {
+                    setCoachMode("practice");
+                    setInput(`Give me one CAPS practice question on ${activeSubject}.`);
+                  }}
+                  className="rounded-xl border border-ink/10 bg-chalk p-3 text-left hover:bg-white"
+                >
+                  <p className="text-sm font-black">Practice now</p>
+                  <p className="mt-1 text-xs text-ink/60">Try an exam-style question and check your steps.</p>
+                </button>
+                <button
+                  onClick={() => {
+                    setCoachMode("revise");
+                    setInput(`Revise the most important Grade ${profile.grade} CAPS topics for ${activeSubject}.`);
+                  }}
+                  className="rounded-xl border border-ink/10 bg-chalk p-3 text-left hover:bg-white"
+                >
+                  <p className="text-sm font-black">Revise weak areas</p>
+                  <p className="mt-1 text-xs text-ink/60">Focus on the topics you need to fix first.</p>
+                </button>
+                <button
+                  onClick={() => {
+                    setCoachMode("markAnswer");
+                    setInput(activeSubject);
+                  }}
+                  className="rounded-xl border border-ink/10 bg-chalk p-3 text-left hover:bg-white"
+                >
+                  <p className="text-sm font-black">Mark my answer</p>
+                  <p className="mt-1 text-xs text-ink/60">Paste your answer and get marking feedback.</p>
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
             {messages.map((msg) => (
               <MessageBubble key={msg.id} msg={msg} onRate={rateResponse} onAction={handleMessageAction} />
@@ -804,6 +852,30 @@ export default function StudyCoachPage() {
                 <p className="mt-2 text-xs text-ink/60">
                   The coach will prioritise this area when you ask for revision or practice on that subject.
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedSubject(coachStats.topWeakTopic?.subjectName || activeSubject);
+                      setCoachMode("revise");
+                      setInput(`Revise ${coachStats.topWeakTopic?.topicLabel || "this topic"} for ${coachStats.topWeakTopic?.subjectName || activeSubject}.`);
+                      setActivePane("progress");
+                    }}
+                    className="focus-ring rounded-full bg-veld px-3 py-1.5 text-xs font-black text-white"
+                  >
+                    Review weak topic
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedSubject(coachStats.topWeakTopic?.subjectName || activeSubject);
+                      setCoachMode("practice");
+                      setInput(`Give me one CAPS practice question on ${coachStats.topWeakTopic?.topicLabel || "this topic"}.`);
+                      setActivePane("progress");
+                    }}
+                    className="focus-ring rounded-full border border-ink/10 px-3 py-1.5 text-xs font-black text-ink/70 hover:bg-white"
+                  >
+                    Practice it
+                  </button>
+                </div>
               </div>
             ) : (
               <p className="mt-3 text-xs text-ink/45">No stored history yet. Use the coach a few times to build progress data.</p>

@@ -155,6 +155,20 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : null}
+        <div className="mt-4">
+          <p className="text-[11px] font-black uppercase tracking-widest text-ink/45">Quick subject start</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {profile.subjects.slice(0, 5).map((subject) => (
+              <Link
+                key={subject.id}
+                href={buildCoachHref(subject.name, subject.name, "revise")}
+                className="focus-ring rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-chalk"
+              >
+                {subject.name}
+              </Link>
+            ))}
+          </div>
+        </div>
       </Card>
       <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <Card>
@@ -213,13 +227,20 @@ export default function DashboardPage() {
             {atRisk.map((subject) => {
               const risk = subjectRisk(subject.currentMark, subject.targetMark);
               return (
-                <div key={subject.id}>
+                <Link
+                  key={subject.id}
+                  href={buildCoachHref(subject.name, subject.name, "revise")}
+                  className="block rounded-lg border border-ink/10 p-3 transition hover:bg-chalk"
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-bold">{subject.name}</p>
+                    <div>
+                      <p className="font-bold">{subject.name}</p>
+                      <p className="text-xs text-ink/55">Tap to open the coach on this subject</p>
+                    </div>
                     <Badge tone={risk === "At Risk" ? "risk" : "watch"}>{risk}</Badge>
                   </div>
                   <ProgressBar value={subject.currentMark} target={subject.targetMark} />
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -228,10 +249,25 @@ export default function DashboardPage() {
           <h2 className="text-xl font-black">Recommended questions</h2>
           <div className="mt-4 space-y-3">
             {questions.slice(0, 3).map((question) => (
-              <a key={question.id} href={question.sourceUrl} target="_blank" className="block rounded-lg border border-ink/10 p-3 hover:bg-chalk">
+              <div key={question.id} className="rounded-lg border border-ink/10 p-3">
                 <p className="font-bold">{question.subject}</p>
                 <p className="text-sm text-ink/65">{question.topic} - {question.year} {question.paperNumber}</p>
-              </a>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    href={buildCoachHref(question.subject, question.topic, "practice")}
+                    className="focus-ring rounded-full bg-veld px-3 py-1.5 text-xs font-black text-white"
+                  >
+                    Practice in coach
+                  </Link>
+                  <a
+                    href={question.sourceUrl}
+                    target="_blank"
+                    className="focus-ring rounded-full border border-ink/10 px-3 py-1.5 text-xs font-black text-ink/70 hover:bg-chalk"
+                  >
+                    Open paper
+                  </a>
+                </div>
+              </div>
             ))}
           </div>
         </Card>
