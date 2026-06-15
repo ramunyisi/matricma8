@@ -116,6 +116,7 @@ export default function StudyCoachPage() {
   const [activePane, setActivePane] = useState<CoachPane>("progress");
   const [showSubjectPicker, setShowSubjectPicker] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const queryAppliedRef = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const activeSubject = selectedSubject || profile.subjects[0]?.name || "General";
@@ -240,6 +241,32 @@ export default function StudyCoachPage() {
       // Ignore storage failures.
     }
   }, [selectedSubject, subjectLoaded]);
+
+  useEffect(() => {
+    if (!subjectLoaded || queryAppliedRef.current) return;
+    if (profile.subjects.length === 0) return;
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const subjectParam = searchParams.get("subject")?.trim() ?? "";
+    const topicParam = searchParams.get("topic")?.trim() ?? "";
+    const modeParam = searchParams.get("mode")?.trim() ?? "";
+    const validSubject = profile.subjects.some((subject) => subject.name === subjectParam) ? subjectParam : "";
+    const validMode = ["chat", "explain", "practice", "revise", "testMe", "markAnswer"].includes(modeParam)
+      ? (modeParam as CoachMode)
+      : null;
+
+    if (validSubject) setSelectedSubject(validSubject);
+    if (validMode) setCoachMode(validMode);
+    if (topicParam) {
+      setInput(topicParam);
+      setRecentTopics((prev) => [topicParam, ...prev.filter((item) => item !== topicParam)].slice(0, 5));
+    }
+
+    if (validSubject || topicParam || validMode) {
+      queryAppliedRef.current = true;
+      setShowSubjectPicker(false);
+    }
+  }, [profile.subjects, selectedSubject, subjectLoaded]);
 
   // Cancel any in-flight stream on unmount
   useEffect(() => {
@@ -552,6 +579,7 @@ export default function StudyCoachPage() {
     setAnswerDraft("");
     setInput("");
     setShowSubjectPicker(false);
+    queryAppliedRef.current = false;
     setMessages([
       {
         id: crypto.randomUUID(),

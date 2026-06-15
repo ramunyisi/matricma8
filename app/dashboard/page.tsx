@@ -23,6 +23,8 @@ export default function DashboardPage() {
   const [questions, setQuestions] = useState<PastPaperQuestion[]>(sampleQuestions);
   const [plan, setPlan] = useState<StudyTask[]>([]);
   const [planMessage, setPlanMessage] = useState("");
+  const [lastCoachSubject, setLastCoachSubject] = useState("");
+  const [recentCoachTopics, setRecentCoachTopics] = useState<string[]>([]);
   const allBursaryMatches = matchBursaries(profile, bursaries);
   const bursaryMatches = allBursaryMatches.slice(0, 3);
   const completedTasks = plan.filter((t) => t.completed).length;
@@ -48,6 +50,22 @@ export default function DashboardPage() {
       .then(setPlan)
       .catch((planError) => setPlanMessage(friendlyError(planError, "Could not load study plan.")));
   }, [profile]);
+
+  useEffect(() => {
+    try {
+      const savedSubject = localStorage.getItem("matricsa-study-coach-subject");
+      const savedTopics = localStorage.getItem("matricsa-study-coach-topics");
+      if (savedSubject) setLastCoachSubject(savedSubject);
+      if (savedTopics) {
+        const parsed = JSON.parse(savedTopics);
+        if (Array.isArray(parsed)) {
+          setRecentCoachTopics(parsed.filter((item): item is string => typeof item === "string").slice(0, 3));
+        }
+      }
+    } catch {
+      // Ignore storage failures.
+    }
+  }, []);
 
   async function toggleTask(task: StudyTask) {
     const nextCompleted = !task.completed;
@@ -86,6 +104,58 @@ export default function DashboardPage() {
         />
         <StatCard label="Bursary matches" value={String(allBursaryMatches.length)} sub="open bursaries" />
       </div>
+      <Card className="mb-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-xl font-black">Resume study</h2>
+            <p className="text-sm text-ink/65">Jump back into the last subject and topic you worked on.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href={buildCoachHref(lastCoachSubject, recentCoachTopics[0], "practice")} className="focus-ring rounded-lg bg-veld px-3 py-2 text-sm font-black text-white">
+              Open coach
+            </Link>
+            <Link href={buildCoachHref(lastCoachSubject, recentCoachTopics[0], "explain")} className="focus-ring rounded-lg border border-ink/10 px-3 py-2 text-sm font-black">
+              Explain it
+            </Link>
+            <Link href="/aps" className="focus-ring rounded-lg border border-ink/10 px-3 py-2 text-sm font-black">
+              APS
+            </Link>
+            <Link href="/past-papers" className="focus-ring rounded-lg border border-ink/10 px-3 py-2 text-sm font-black">
+              Papers
+            </Link>
+            <Link href="/bursaries" className="focus-ring rounded-lg border border-ink/10 px-3 py-2 text-sm font-black">
+              Bursaries
+            </Link>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-ink/10 bg-chalk p-3">
+            <p className="text-[11px] font-black uppercase tracking-widest text-ink/45">Last coach subject</p>
+            <p className="mt-1 text-base font-black">{lastCoachSubject || "No subject saved yet"}</p>
+          </div>
+          <div className="rounded-lg border border-ink/10 bg-chalk p-3">
+            <p className="text-[11px] font-black uppercase tracking-widest text-ink/45">Recent topic</p>
+            <p className="mt-1 text-base font-black">{recentCoachTopics[0] || "No topic saved yet"}</p>
+          </div>
+          <div className="rounded-lg border border-ink/10 bg-chalk p-3">
+            <p className="text-[11px] font-black uppercase tracking-widest text-ink/45">Next best action</p>
+            <p className="mt-1 text-base font-black">Open the coach and continue the last topic</p>
+          </div>
+        </div>
+        {recentCoachTopics.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {recentCoachTopics.map((topic) => (
+              <Link
+                key={topic}
+                href={buildCoachHref(lastCoachSubject, topic, "practice")}
+                className="focus-ring rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-chalk"
+              >
+                {topic.length > 38 ? `${topic.slice(0, 38)}…` : topic}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+      </Card>
       <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <Card>
           <div className="flex items-center justify-between gap-3">
@@ -222,4 +292,13 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-3xl font-black">{value}</p>
     </div>
   );
+}
+
+function buildCoachHref(subject?: string, topic?: string, mode?: string) {
+  const params = new URLSearchParams();
+  if (subject) params.set("subject", subject);
+  if (topic) params.set("topic", topic);
+  if (mode) params.set("mode", mode);
+  const query = params.toString();
+  return query ? `/study-coach?${query}` : "/study-coach";
 }
