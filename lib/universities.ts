@@ -79,7 +79,26 @@ export const universities: UniversityDirectoryItem[] = [
     type: "Comprehensive university",
     websiteUrl: "https://www.mandela.ac.za",
     applicationUrl: "https://www.mandela.ac.za/Study-at-Mandela/Application",
-    apsInfoUrl: "https://www.mandela.ac.za/Study-at-Mandela/Admission/Undergraduate"
+    apsInfoUrl: "https://www.mandela.ac.za/Study-at-Mandela/Admission/Undergraduate",
+    prospectusUrl: "https://socialdev.mandela.ac.za/socialdev/media/Store/documents/Undergrad/Mandela_Uni-Undergrad-Guide.pdf",
+    prospectusHighlights: [
+      "NMU uses an Applicant Score (AS) for admission planning; Life Orientation is excluded and the score is calculated from six subjects.",
+      "The AS calculation must include Home Language, First Additional Language, and Mathematics, Mathematical Literacy, or Technical Mathematics.",
+      "Provisional admission is based on final Grade 11, Grade 12 June, or Grade 12 September results; the final decision uses final NSC/IEB results.",
+      "Some programmes add selection steps such as a portfolio, interview, fitness test, medical test, or departmental selection.",
+      "Most NMU programmes do not require NBTs, but learners must check programme-specific requirements where NBT results are listed.",
+      "NMU offers extended curriculum programmes that allow learners who do not meet mainstream minimums to complete the same qualification over a longer period with added academic support.",
+      "Applicants need their own cellphone number and valid personal email address for the two-part online application process.",
+      "The undergraduate guide lists certified ID and latest school results among key supporting documents for application finalisation.",
+      "The A-Z undergraduate quick guide lists NMU campuses including South, North, Second Avenue, Missionvale, Bird Street, Ocean Sciences, and George."
+    ],
+    prospectusNotes: [
+      "Selected NMU programme benchmarks from the A-Z quick guide include Civil Engineering AS 370 with Mathematics or Technical Mathematics at 60% and Physical Science or Technical Science at 50%; BIT AS 370 with Mathematics or Technical Mathematics at 50%; BEd Foundation Phase AS 350/365/365 with language and maths-related requirements; BSW AS 350/365/365 with Mathematics 40% or Mathematical Literacy 65%; BSc Dietetics AS 390 with Mathematics and Physical Sciences at 60%.",
+      "NMU states that meeting minimum requirements does not guarantee admission because programme capacity and selection rules still apply.",
+      "Contact centre: 041 504 1111; application support emails include info@mandela.ac.za and onlineapplications@mandela.ac.za."
+    ],
+    contactEmail: "info@mandela.ac.za",
+    contactPhone: "+27 (0)41 504 1111"
   },
   {
     name: "North-West University",
