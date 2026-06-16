@@ -126,10 +126,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-chalk">
-      <header className="sticky top-0 z-40 border-b border-ink/[.07] bg-chalk/95 shadow-[0_1px_0_rgba(23,33,43,0.04)] backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-ink/[.08] bg-white/92 shadow-[0_1px_0_rgba(23,33,43,0.04)] backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center font-black tracking-tight text-ink">
-            <Image src={matricLogo} alt="MatricSA logo" width={36} height={36} className="h-9 w-9 rounded-lg object-contain" />
+          <Link href="/" className="flex items-center gap-3 font-black tracking-tight text-ink">
+            <Image src={matricLogo} alt="MatricSA logo" width={36} height={36} className="h-9 w-9 rounded-lg border border-ink/10 bg-white object-contain p-0.5" />
+            <div className="hidden leading-tight sm:block">
+              <p className="text-sm font-black">MatricSA</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-ink/38">CAPS learner success</p>
+            </div>
           </Link>
           <button
             onClick={() => setMenuOpen(true)}
@@ -149,8 +153,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
                     isActive
-                      ? "bg-veld/[.08] text-veld"
-                      : "text-ink/60 hover:bg-white hover:text-ink"
+                      ? "bg-ink text-white"
+                      : "text-ink/58 hover:bg-chalk hover:text-ink"
                   )}
                 >
                   <Icon size={16} />
@@ -162,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="ml-2 flex items-center gap-2 border-l border-ink/10 pl-3">
                 <button
                   onClick={logout}
-                  className="focus-ring inline-flex items-center gap-2 rounded-xl bg-ink px-3 py-2 text-sm font-black text-white transition-opacity hover:opacity-85"
+                  className="focus-ring inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-black text-white transition-opacity hover:opacity-85"
                 >
                   <LogOut size={16} />
                   Logout

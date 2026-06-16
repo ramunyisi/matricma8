@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  background: #f7f4ec;
+  background: #f6f3eb;
 }
 
 * {
@@ -19,7 +19,7 @@ html {
 
 body {
   margin: 0;
-  background: #f7f4ec;
+  background: #f6f3eb;
   color: #17212b;
 }
 
@@ -63,6 +63,6 @@ textarea {
 
 @layer components {
   .input {
-    @apply mt-2 w-full rounded-xl border border-ink/[.12] bg-white px-3.5 py-2.5 text-ink shadow-sm outline-none transition-all duration-150 placeholder:text-ink/35 focus:border-veld focus:shadow-none focus:ring-2 focus:ring-veld/20;
+    @apply mt-2 w-full rounded-lg border border-ink/[.12] bg-white px-3.5 py-2.5 text-ink shadow-sm outline-none transition-all duration-150 placeholder:text-ink/35 focus:border-veld focus:shadow-none focus:ring-2 focus:ring-veld/20;
   }
 }

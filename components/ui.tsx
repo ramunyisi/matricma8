@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <section className={cn("rounded-xl border border-ink/[.07] bg-white p-5 shadow-card", className)}>
+    <section className={cn("rounded-lg border border-ink/[.08] bg-white p-5 shadow-card", className)}>
       {children}
     </section>
   );
@@ -23,7 +23,7 @@ export function Badge({
     sample: "bg-sky/10 text-sky ring-sky/20"
   };
   return (
-    <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1", tones[tone])}>
+    <span className={cn("inline-flex rounded-md px-2.5 py-1 text-xs font-bold ring-1", tones[tone])}>
       {children}
     </span>
   );
@@ -32,9 +32,9 @@ export function Badge({
 export function ProgressBar({ value, target }: { value: number; target?: number }) {
   return (
     <div className="space-y-1.5">
-      <div className="h-1.5 overflow-hidden rounded-full bg-ink/[.08]">
+      <div className="h-1.5 overflow-hidden rounded bg-ink/[.08]">
         <div
-          className="h-full rounded-full bg-veld transition-all duration-500"
+          className="h-full rounded bg-veld transition-all duration-500"
           style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
         />
       </div>
@@ -84,7 +84,7 @@ export function StatCard({
   }[tone];
 
   return (
-    <div className="rounded-xl border border-ink/[.07] bg-white p-4 shadow-card">
+    <div className="rounded-lg border border-ink/[.08] bg-white p-4 shadow-card">
       <p className="text-[11px] font-black uppercase tracking-widest text-ink/40">{label}</p>
       <p className={cn("mt-2 text-3xl font-black tabular-nums tracking-tight", valueColor)}>{value}</p>
       {sub ? <p className="mt-1 text-xs text-ink/50">{sub}</p> : null}

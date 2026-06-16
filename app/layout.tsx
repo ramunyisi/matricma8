@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MatricSA",
-  description: "AI study coaching, APS prediction, past-paper navigation, and bursary matching for South African CAPS learners.",
+  title: "MatricSA | CAPS Learner Success Platform",
+  description: "A professional CAPS learner-success platform for schools, districts, and South African Grade 10-12 learners.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
