@@ -28,14 +28,16 @@ export function calculateAps(subjects: LearnerSubject[], rule?: ApsRule): number
     return true;
   });
 
-  return included.reduce((sum, subject) => {
+  const points = included.map((subject) => {
     const mark = estimateFinalMark(subject.currentMark, subject.targetMark);
     if (rule?.ruleJson.method === "custom_bands" && rule.ruleJson.bands) {
       const band = [...rule.ruleJson.bands].sort((a, b) => b.min - a.min).find((item) => mark >= item.min);
-      return sum + (band?.points ?? 0);
+      return band?.points ?? 0;
     }
-    return sum + nscLevel(mark);
-  }, 0);
+    return nscLevel(mark);
+  });
+  const countedPoints = rule?.ruleJson.maxSubjects ? points.sort((a, b) => b - a).slice(0, rule.ruleJson.maxSubjects) : points;
+  return countedPoints.reduce((sum, point) => sum + point, 0);
 }
 
 export function subjectRisk(currentMark: number, targetMark: number): RiskLevel {

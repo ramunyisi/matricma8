@@ -27,6 +27,7 @@ export default function ApsPage() {
   const prediction = evaluateApsRule(subjects, selectedRule);
   const simulation = useMemo(() => simulateWhatIf(subjects, whatIfSubject, whatIfMark, selectedRule), [subjects, whatIfSubject, whatIfMark, selectedRule]);
   const programmeMatches = useMemo(() => matchProgrammes(subjects, rules), [subjects, rules]);
+  const selectedScoreLabel = scoreLabel(selectedRule);
 
   useEffect(() => {
     if (profile.subjects.length === 0) return;
@@ -107,10 +108,12 @@ export default function ApsPage() {
             <h2 className="text-xl font-black">Your APS summary</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <Metric label="Current average" value={`${calculateAverage(subjects)}%`} />
-              <Metric label="APS estimate" value={String(calculateAps(subjects, selectedRule))} />
+              <Metric label={selectedScoreLabel} value={String(calculateAps(subjects, selectedRule))} />
             </div>
             <p className="mt-4 rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/65">
-              This APS uses common NSC levels and excludes Life Orientation. Programme matches below also check stored minimum subjects where available.
+              {selectedRule.ruleJson.method === "custom_bands"
+                ? "This selected rule uses a prospectus-specific score method. For NMU, MatricSA estimates Applicant Score from six subjects and excludes Life Orientation."
+                : "This APS uses common NSC levels and excludes Life Orientation. Programme matches below also check stored minimum subjects where available."}
             </p>
           </Card>
           <Card>
@@ -138,7 +141,7 @@ export default function ApsPage() {
           <Badge tone="sample">Estimate only</Badge>
         </div>
         <p className="mt-3 rounded-lg bg-chalk p-3 text-sm font-semibold leading-6 text-ink/70">
-          For UCT, UP, and NWU we also show prospectus context from the official undergraduate prospectuses so the match card includes the local APS method, closing-date context, and selection notes where available.
+          For UCT, UP, NWU, NMU, and TUT we also show prospectus context from official undergraduate prospectuses, including local score methods, subject requirements, and selection notes where available.
         </p>
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {programmeMatches.map((match) => (
@@ -153,7 +156,7 @@ export default function ApsPage() {
                 </Badge>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                <Info label="Required APS" value={String(match.rule.ruleJson.minimumTotal ?? "Check source")} />
+                <Info label={requiredScoreLabel(match.rule)} value={String(match.rule.ruleJson.minimumTotal ?? "Check source")} />
                 <Info label="Your gap" value={match.apsGap >= 0 ? `+${match.apsGap}` : String(match.apsGap)} />
               </div>
               {match.missingSubjects.length > 0 || match.belowMinimumSubjects.length > 0 ? (
@@ -208,4 +211,15 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg bg-chalk p-3"><p className="text-xs font-bold text-ink/55">{label}</p><p className="mt-1 font-black">{value}</p></div>;
+}
+
+function scoreLabel(rule: ApsRule) {
+  if (rule.institutionName === "Nelson Mandela University" || rule.ruleJson.method === "custom_bands") return "Score estimate";
+  return "APS estimate";
+}
+
+function requiredScoreLabel(rule: ApsRule) {
+  if (rule.institutionName === "Nelson Mandela University") return "Required AS";
+  if (rule.ruleJson.method === "custom_bands") return "Required score";
+  return "Required APS";
 }

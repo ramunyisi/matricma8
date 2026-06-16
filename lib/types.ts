@@ -45,6 +45,7 @@ export type ApsRule = {
   ruleJson: {
     method: "nsc_levels" | "custom_bands";
     includeLifeOrientation?: boolean;
+    maxSubjects?: number;
     bands?: { min: number; points: number }[];
     minimumTotal?: number;
   };

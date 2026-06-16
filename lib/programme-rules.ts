@@ -241,6 +241,133 @@ export const programmeRules: ApsRule[] = [
       "Minimum requirements do not guarantee admission; faculty-specific and selection rules still apply."
     ]
   }),
+  nmuRule("nmu-civil-engineering", "Bachelor of Engineering Technology (Civil Engineering)", 370, [
+    ["Mathematics / Technical Mathematics", 60],
+    ["Physical Sciences / Technical Science", 50]
+  ], [
+    "NMU quick guide lists Civil Engineering at Applicant Score (AS) 370.",
+    "Subject requirements include Mathematics or Technical Mathematics at 60%, and Physical Science or Technical Science at 50%.",
+    "NMU AS is calculated from six subjects, excludes Life Orientation, and must include Home Language, First Additional Language, and Mathematics, Mathematical Literacy, or Technical Mathematics."
+  ]),
+  nmuRule("nmu-bit", "Bachelor of Information Technology", 370, [
+    ["Mathematics / Technical Mathematics", 50]
+  ], [
+    "NMU quick guide lists Bachelor of Information Technology at AS 370.",
+    "Subject requirements include Mathematics or Technical Mathematics at 50%.",
+    "Some NMU qualifications can have additional selection steps; verify the official programme page before applying."
+  ]),
+  nmuRule("nmu-bcom-accounting", "BCom (Accounting)", 410, [
+    ["Mathematics", 60]
+  ], [
+    "NMU quick guide lists BCom Accounting routes at AS 410.",
+    "Mathematics is required for this accounting route.",
+    "Meeting the minimum AS and subject requirements does not guarantee admission where programme capacity or selection rules apply."
+  ]),
+  nmuRule("nmu-bsw", "Bachelor of Social Work", 350, [
+    ["Mathematics", 40]
+  ], [
+    "NMU undergraduate guide lists Bachelor of Social Work at AS 350 for Mathematics applicants, AS 365 for Technical Mathematics, and AS 365 for Mathematical Literacy.",
+    "The guide states Mathematics 40%, Technical Mathematics, or Mathematical Literacy 65%, and admission is subject to departmental selection.",
+    "Students must register as student social workers with SACSSP before practical or applied modules."
+  ]),
+  nmuRule("nmu-bsc-dietetics", "BSc (Dietetics)", 390, [
+    ["Mathematics", 60],
+    ["Physical Sciences", 60]
+  ], [
+    "NMU quick guide lists BSc Dietetics at AS 390.",
+    "The quick guide benchmark includes Mathematics and Physical Sciences at 60%.",
+    "Health programmes may include additional selection or placement constraints."
+  ]),
+  nmuRule("nmu-bed-foundation", "BEd Foundation Phase Teaching", 350, [
+    ["English Home Language / English First Additional Language", 50],
+    ["Mathematics", 40]
+  ], [
+    "NMU quick guide lists Foundation Phase Education at AS 350 for Mathematics applicants, with higher AS alternatives for Technical Mathematics or Mathematical Literacy.",
+    "Language and maths-related requirements apply; verify the exact current programme route before applying.",
+    "Education routes can have phase-specific language requirements."
+  ]),
+  nmuRule("nmu-environmental-sciences", "BSc Environmental Sciences", 410, [
+    ["Mathematics", 50],
+    ["Physical Sciences / Life Sciences / Geography", 50]
+  ], [
+    "NMU quick guide lists Environmental Sciences routes at AS 410, with extended curriculum options at lower AS thresholds.",
+    "Science and geography-related subject requirements vary by route.",
+    "Extended curriculum programmes provide additional academic support over a longer route."
+  ]),
+  nmuRule("nmu-public-administration", "BAdmin Public Administration", 350, [
+    ["English Home Language / English First Additional Language", 50]
+  ], [
+    "NMU quick guide lists BAdmin Public Administration at AS 350.",
+    "Public administration routes must still be checked against the current faculty requirements.",
+    "NMU provisional admission uses Grade 11 final or Grade 12 June/September results; final admission uses final NSC/IEB results."
+  ]),
+  tutRule("tut-bengtech-engineering", "BEngTech Engineering Technology", 28, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Mathematics / Technical Mathematics", 50],
+    ["Physical Sciences / Technical Sciences", 50]
+  ], [
+    "TUT engineering technology routes use programme-specific APS tables and generally require English plus Mathematics or Technical Mathematics and Physical Sciences or Technical Sciences.",
+    "Some BEngTech engineering programmes list higher APS thresholds, so learners should verify the exact discipline before applying."
+  ]),
+  tutRule("tut-dip-civil-engineering", "Diploma in Civil Engineering", 26, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Mathematics / Technical Mathematics", 40],
+    ["Physical Sciences / Technical Sciences", 40]
+  ], [
+    "TUT diploma engineering routes are practical university-of-technology pathways with Mathematics or Technical Mathematics and Physical Sciences or Technical Sciences checks.",
+    "Campus and closing-date rules differ by engineering discipline."
+  ]),
+  tutRule("tut-dip-computer-science", "Diploma in Computer Science", 26, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Mathematics / Technical Mathematics", 40]
+  ], [
+    "TUT lists Diploma in Computer Science at APS 26 with Mathematics or Technical Mathematics.",
+    "The prospectus shows an APS 28 route for applicants using Mathematical Literacy."
+  ]),
+  tutRule("tut-dip-information-technology", "Diploma in Information Technology", 26, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Mathematics / Technical Mathematics", 40]
+  ], [
+    "TUT lists Diploma in Information Technology at APS 26 with Mathematics or Technical Mathematics.",
+    "The prospectus shows an APS 28 route for applicants using Mathematical Literacy."
+  ]),
+  tutRule("tut-bachelor-radiography-diagnostics", "Bachelor of Radiography in Diagnostics", 30, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Mathematics / Technical Mathematics", 50],
+    ["Physical Sciences / Technical Sciences", 50],
+    ["Life Sciences", 50]
+  ], [
+    "TUT Health Sciences programmes have programme-specific subject rules and early closing dates.",
+    "Use this as a planning benchmark and verify the exact current Radiography table before applying."
+  ]),
+  tutRule("tut-dip-public-affairs", "Diploma in Public Affairs", 20, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Mathematics / Mathematical Literacy", 40]
+  ], [
+    "TUT lists Public Affairs diploma routes such as Administration of State and Local Government in the Management Sciences faculty.",
+    "The prospectus shows these public-administration routes around APS 20 with English and maths-related requirements."
+  ]),
+  tutRule("tut-dip-legal-support", "Diploma in Legal Support", 20, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Home Language / First Additional Language", 40]
+  ], [
+    "TUT lists Legal Support as a law-adjacent diploma route with language requirements.",
+    "Learners interested in legal administration should compare this route with BA Law and LLB pathways at traditional universities."
+  ]),
+  tutRule("tut-dip-sport-management", "Diploma in Sport Management", 24, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Mathematics / Technical Mathematics / Mathematical Literacy", 40]
+  ], [
+    "TUT lists Sport Management in its first-year course information with English and maths-related admission checks.",
+    "Commercial subjects and practical sport involvement can strengthen route planning, but the official table remains the final source."
+  ]),
+  tutRule("tut-dip-hospitality-management", "Diploma in Hospitality Management", 24, [
+    ["English Home Language / English First Additional Language", 40],
+    ["Mathematics / Technical Mathematics / Mathematical Literacy", 40]
+  ], [
+    "TUT hospitality, tourism, and event management routes sit in practical career-focused study areas.",
+    "The prospectus indicates APS around 24 for these management-science routes, with programme-specific recommended subjects."
+  ]),
   rule("cput-diagnostic-radiography", "Cape Peninsula University of Technology", "BSc Diagnostic Radiography", 30, [
     ["English Home Language / English First Additional Language", 50],
     ["Mathematics", 50],
@@ -326,5 +453,64 @@ function rule(
     lastVerifiedAt: "2026-06-08",
     ...extra,
     sampleData: true
+  };
+}
+
+function nmuRule(
+  id: string,
+  programmeName: string,
+  minimumTotal: number,
+  requirements: Array<[string, number]>,
+  prospectusNotes: string[]
+): ApsRule {
+  return {
+    id,
+    institutionName: "Nelson Mandela University",
+    programmeName,
+    ruleJson: {
+      method: "custom_bands",
+      includeLifeOrientation: false,
+      maxSubjects: 6,
+      minimumTotal,
+      bands: Array.from({ length: 101 }, (_, mark) => ({ min: mark, points: mark }))
+    },
+    minimumSubjectRequirementsJson: requirements.map(([subject, minMark]) => ({ subject, minMark })),
+    sourceUrl: "https://www.mandela.ac.za/Study-at-Mandela/Application",
+    lastVerifiedAt: "2026-06-16",
+    prospectusUrl: "https://socialdev.mandela.ac.za/socialdev/media/Store/documents/Undergrad/Mandela_Uni-Undergrad-Guide.pdf",
+    prospectusNotes: [
+      ...prospectusNotes,
+      "NMU A-Z programme quick guide source: https://www.mandela.ac.za/www-new/media/Store/documents/StudyAtMandela/QuickGuides/Apply/NMU-Z-CARD-UNDERGRAD-PROGRAMME_DIGITAL-FA.pdf"
+    ],
+    sampleData: false
+  };
+}
+
+function tutRule(
+  id: string,
+  programmeName: string,
+  minimumTotal: number,
+  requirements: Array<[string, number]>,
+  prospectusNotes: string[]
+): ApsRule {
+  return {
+    id,
+    institutionName: "Tshwane University of Technology",
+    programmeName,
+    ruleJson: {
+      method: "nsc_levels",
+      includeLifeOrientation: false,
+      minimumTotal
+    },
+    minimumSubjectRequirementsJson: requirements.map(([subject, minMark]) => ({ subject, minMark })),
+    sourceUrl: "https://www.tut.ac.za/study-at-tut/i-want-to-study/apply",
+    lastVerifiedAt: "2026-06-16",
+    prospectusUrl: "https://www.tut.ac.za/media/tshwane-interim/site-content/documents/First-Year-Course_Information.pdf",
+    prospectusNotes: [
+      ...prospectusNotes,
+      "TUT APS excludes Life Orientation and does not count achievement level 1.",
+      "Meeting minimum APS and subject rules does not guarantee admission because selection, capacity, campus availability, and closing dates still apply."
+    ],
+    sampleData: false
   };
 }

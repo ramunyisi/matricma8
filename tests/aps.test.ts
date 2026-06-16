@@ -49,4 +49,21 @@ describe("APS calculation", () => {
     expect(matches[0].prediction.eligibilityStatus).toBe("Likely qualifies");
     expect(matches.some((match) => match.rule.institutionName.includes("University"))).toBe(true);
   });
+
+  it("includes NMU prospectus-backed Applicant Score rules", () => {
+    const nmuRules = programmeRules.filter((rule) => rule.institutionName === "Nelson Mandela University");
+    expect(nmuRules.length).toBeGreaterThan(0);
+    expect(nmuRules.every((rule) => rule.ruleJson.method === "custom_bands")).toBe(true);
+    expect(nmuRules.every((rule) => rule.ruleJson.maxSubjects === 6)).toBe(true);
+    expect(nmuRules.some((rule) => rule.programmeName.includes("Social Work"))).toBe(true);
+  });
+
+  it("includes TUT prospectus-backed APS rules", () => {
+    const tutRules = programmeRules.filter((rule) => rule.institutionName === "Tshwane University of Technology");
+    expect(tutRules.length).toBeGreaterThan(0);
+    expect(tutRules.every((rule) => rule.ruleJson.method === "nsc_levels")).toBe(true);
+    expect(tutRules.every((rule) => rule.prospectusUrl?.includes("First-Year-Course_Information.pdf"))).toBe(true);
+    expect(tutRules.some((rule) => rule.programmeName.includes("Computer Science"))).toBe(true);
+    expect(tutRules.some((rule) => rule.programmeName.includes("Public Affairs"))).toBe(true);
+  });
 });

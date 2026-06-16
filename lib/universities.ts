@@ -175,7 +175,20 @@ export const universities: UniversityDirectoryItem[] = [
     type: "University of technology",
     websiteUrl: "https://www.tut.ac.za",
     applicationUrl: "https://www.tut.ac.za/study-at-tut/i-want-to-study/apply",
-    apsInfoUrl: "https://online.tut.ac.za/hubfs/TUT_APS.pdf"
+    apsInfoUrl: "https://online.tut.ac.za/hubfs/TUT_APS.pdf",
+    prospectusUrl: "https://www.tut.ac.za/media/tshwane-interim/site-content/documents/First-Year-Course_Information.pdf",
+    prospectusHighlights: [
+      "TUT first-year applications for 2027 open on 1 April 2026 and programmes may close earlier once capacity is reached.",
+      "Life Orientation and achievement level 1 are not considered in the TUT APS calculation.",
+      "General TUT admission guidance requires English Home Language or First Additional Language at minimum level 3, plus programme-specific Mathematics, Technical Mathematics, Mathematical Literacy, Physical Sciences, Technical Sciences, or other subjects.",
+      "Bachelor's degree routes generally require at least four subjects at level 4, while diploma routes generally require at least four subjects at level 3.",
+      "Applicants may use Grade 11 or Grade 12 mid-year results for provisional selection, but final admission depends on final Grade 12 results.",
+      "The prospectus lists programme-specific APS, campus, subject, and closing-date rules across Engineering, ICT, Health Sciences, Management Sciences, Humanities, and other faculties."
+    ],
+    prospectusNotes: [
+      "Selected TUT examples from the first-year course information guide include Diploma in Computer Science and Diploma in Information Technology at APS 26 with Mathematics or Technical Mathematics, or APS 28 with Mathematical Literacy; Public Affairs diploma routes around APS 20; Sport Management around APS 24; and Hospitality, Tourism, or Event Management routes around APS 24.",
+      "Engineering and Health Sciences programmes can carry stricter subject thresholds and earlier closing dates, so learners should verify the exact programme table before applying."
+    ]
   },
   {
     name: "University of Cape Town",
