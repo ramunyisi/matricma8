@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { getSupabaseBrowserClient, mirrorSessionForMiddleware } from "@/lib/supabase";
 import { friendlyError } from "@/lib/utils";
 import matricLogo from "../../../matricsalogo.png";
 
@@ -45,6 +45,7 @@ export default function SignupPage() {
         setMessage("Account created. Check your email to confirm your account, then log in to complete onboarding.");
         return;
       }
+      mirrorSessionForMiddleware(data.session.access_token);
       router.replace("/onboarding");
     } catch (error) {
       setMessage(friendlyError(error, "Supabase is not configured yet."));

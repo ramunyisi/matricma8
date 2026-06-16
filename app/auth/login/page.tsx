@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { getSupabaseBrowserClient, mirrorSessionForMiddleware } from "@/lib/supabase";
 import { friendlyError } from "@/lib/utils";
 import matricLogo from "../../../matricsalogo.png";
 
@@ -32,9 +32,12 @@ export default function LoginPage() {
         setMessage(friendlyError(error));
         return;
       }
+      mirrorSessionForMiddleware(data.session?.access_token);
       const { data: appUser } = await supabase.from("users").select("role").eq("id", data.user.id).maybeSingle();
       const metadataRole = data.user.user_metadata?.role;
-      router.replace((appUser?.role ?? metadataRole) === "teacher_admin" ? "/admin" : "/dashboard");
+      const nextPath = typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("next");
+      const fallbackPath = (appUser?.role ?? metadataRole) === "teacher_admin" ? "/admin" : "/dashboard";
+      router.replace(nextPath?.startsWith("/") ? nextPath : fallbackPath);
     } catch (error) {
       setMessage(friendlyError(error, "Supabase is not configured yet."));
     } finally {

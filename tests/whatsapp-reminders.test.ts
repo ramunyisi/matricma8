@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildBursaryReminderMessage, buildStudyReminderMessage, normalizeWhatsappPhone } from "@/lib/whatsapp-reminders";
+import {
+  buildBursaryReminderMessage,
+  buildStudyReminderMessage,
+  isWithinReminderQuietHours,
+  normalizeWhatsappPhone,
+  reminderKeyForBursary,
+  reminderKeyForStudy
+} from "@/lib/whatsapp-reminders";
 import { demoProfile, sampleBursaries } from "@/lib/sample-data";
 
 describe("whatsapp reminders", () => {
@@ -26,5 +33,18 @@ describe("whatsapp reminders", () => {
     expect(message).toContain(bursary.name);
     expect(message).toContain(bursary.applicationUrl);
     expect(message).toContain("Reminder window");
+  });
+
+  it("handles overnight and same-hour quiet windows", () => {
+    expect(isWithinReminderQuietHours(20, 6, 22)).toBe(true);
+    expect(isWithinReminderQuietHours(20, 6, 5)).toBe(true);
+    expect(isWithinReminderQuietHours(20, 6, 12)).toBe(false);
+    expect(isWithinReminderQuietHours(8, 17, 12)).toBe(true);
+    expect(isWithinReminderQuietHours(8, 8, 8)).toBe(false);
+  });
+
+  it("creates stable reminder keys for idempotent dispatch", () => {
+    expect(reminderKeyForStudy("2026-06-16")).toBe("study-2026-06-16");
+    expect(reminderKeyForBursary("bursary-1", "2026-07-31", 14)).toBe("bursary-bursary-1-2026-07-31-14");
   });
 });

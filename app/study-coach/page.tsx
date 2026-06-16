@@ -8,7 +8,7 @@ import { loadApsRules, loadBursaries, loadCapsContent, loadCapsSections, loadPas
 import { loadCoachMemory, recordCoachMemory, sortCoachMemory, summarizeCoachMemory } from "@/lib/coach-memory";
 import { summarizeCapsContentForPrompt, getCapsSectionsForCoach } from "@/lib/caps-content";
 import { sampleApsRules, sampleBursaries, sampleQuestions } from "@/lib/sample-data";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { getAuthHeaders, getSupabaseBrowserClient } from "@/lib/supabase";
 import { saveStudyPlan } from "@/lib/study-plan-data";
 import { generateLocalStudyPlan } from "@/lib/study-plan";
 import { useLearnerProfile } from "@/lib/use-learner-profile";
@@ -350,12 +350,11 @@ export default function StudyCoachPage() {
     try {
       const res = await fetch("/api/coach", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
         signal: controller.signal,
         body: JSON.stringify({
           type: "stream",
           messages: history,
-          profile: isDemo ? null : profile,
           focusSubject: selectedSubject || undefined,
           coachMode
         })
@@ -431,8 +430,8 @@ export default function StudyCoachPage() {
     try {
       const res = await fetch("/api/coach", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "plan", profile, grounding })
+        headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+        body: JSON.stringify({ type: "plan", grounding })
       });
       const data = await res.json();
       const tasks = normalisePlan(data.result, profile);
@@ -481,7 +480,7 @@ export default function StudyCoachPage() {
     try {
       const res = await fetch("/api/coach", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
         body: JSON.stringify({
           type: "markAnswer",
           subject: selectedSubject || undefined,

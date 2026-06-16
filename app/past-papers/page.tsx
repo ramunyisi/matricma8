@@ -114,6 +114,12 @@ export default function PastPapersPage() {
                         {paper.language ? <p>{paper.language}</p> : null}
                         {paper.collectionTitle ? <p className="mt-1 max-w-40 text-xs leading-5 text-ink/55">{paper.collectionTitle}</p> : null}
                         {paper.sampleData ? <p className="mt-1 text-xs text-sky">Sample data</p> : null}
+                        <a
+                          href={buildCoachHref(paper.subject, `${paper.year} ${paper.examSession} ${paper.paperNumber}`, "practice")}
+                          className="focus-ring mt-3 inline-flex rounded-lg bg-veld px-3 py-2 text-xs font-black text-white"
+                        >
+                          Practise with coach
+                        </a>
                       </div>
                     </div>
                   ))}
@@ -174,4 +180,9 @@ function downloadHref(url: string) {
   }
 
   return url;
+}
+
+function buildCoachHref(subject: string, topic: string, mode: "practice" | "revise") {
+  const params = new URLSearchParams({ subject, topic, mode });
+  return `/study-coach?${params.toString()}`;
 }

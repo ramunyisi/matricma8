@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { BellRing, BookOpen, Bot, Building2, Calculator, FileText, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route, X } from "lucide-react";
+import { BellRing, BookOpen, Bot, Building2, Calculator, FileText, LayoutDashboard, LogOut, Menu, Search, ShieldCheck, UserCircle, Route, Users, X } from "lucide-react";
 import { getLearnerProfile } from "@/lib/learner-profile";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { clearMirroredSession, getSupabaseBrowserClient, mirrorSessionForMiddleware } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
 import matricLogo from "../matricsalogo.png";
 
-const navItems = [
+const navItems: Array<{ href: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] }> = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/study-coach", label: "Study Coach", icon: Bot },
   { href: "/caps-content", label: "CAPS Content", icon: FileText },
@@ -22,6 +22,8 @@ const navItems = [
   { href: "/bursaries", label: "Bursaries", icon: Search },
   { href: "/notifications", label: "Notifications", icon: BellRing },
   { href: "/pathways", label: "Pathways", icon: Route },
+  { href: "/guardian", label: "Guardian", icon: Users, roles: ["parent"] },
+  { href: "/classroom", label: "Classroom", icon: Users, roles: ["teacher_admin"] },
   { href: "/profile", label: "Profile", icon: UserCircle },
   { href: "/admin", label: "Admin", icon: ShieldCheck }
 ];
@@ -53,10 +55,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (!isMounted) return;
 
       if (error || !data.user) {
+        clearMirroredSession();
         router.replace("/auth/login");
         return;
       }
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      mirrorSessionForMiddleware(sessionData.session?.access_token);
       setUser(data.user);
 
       const { data: appUser, error: roleError } = await supabase
@@ -109,10 +114,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     await supabase.auth.signOut();
+    clearMirroredSession();
     router.replace("/auth/login");
   }
 
-  const visibleNavItems = navItems.filter((item) => item.href !== "/admin" || role === "teacher_admin");
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.href === "/admin") return role === "teacher_admin";
+    if (item.roles) return role ? item.roles.includes(role) : false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-chalk">

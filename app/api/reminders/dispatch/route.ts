@@ -5,6 +5,7 @@ import { hasEmailTransport, sendFallbackEmail } from "@/lib/email";
 import {
   buildBursaryReminderMessage,
   buildStudyReminderMessage,
+  isWithinReminderQuietHours,
   normalizeWhatsappPhone,
   reminderKeyForBursary,
   reminderKeyForStudy
@@ -156,7 +157,7 @@ export async function GET(request: Request) {
       continue;
     }
 
-    if (row.whatsapp_study_reminders && row.study_reminder_hour === hour && !isWithinQuietHours(row.quiet_hours_start, row.quiet_hours_end, hour)) {
+    if (row.whatsapp_study_reminders && row.study_reminder_hour === hour && !isWithinReminderQuietHours(row.quiet_hours_start, row.quiet_hours_end, hour)) {
       const reminderKey = reminderKeyForStudy(today);
       if (!(await hasSentReminder(supabase, learnerProfile.id, "study", reminderKey))) {
         const studyTasks = await loadStudyTasksForLearner(supabase, learnerProfile.id, learnerProfile, timeZone);
@@ -182,7 +183,7 @@ export async function GET(request: Request) {
       }
     }
 
-    if (row.whatsapp_deadline_reminders && row.deadline_reminder_hour === hour && !isWithinQuietHours(row.quiet_hours_start, row.quiet_hours_end, hour)) {
+    if (row.whatsapp_deadline_reminders && row.deadline_reminder_hour === hour && !isWithinReminderQuietHours(row.quiet_hours_start, row.quiet_hours_end, hour)) {
       const bursaryRows = await loadDueBursaryRemindersForLearner(supabase, learnerProfile.id, today);
       for (const bursaryReminder of bursaryRows) {
         const bursary = bursaryReminder.bursary;
@@ -538,14 +539,6 @@ function todayInSouthAfrica() {
 
 function isReminderPaused(pausedUntil: string | null, today: string) {
   return Boolean(pausedUntil && pausedUntil >= today);
-}
-
-function isWithinQuietHours(start?: number | null, end?: number | null, hour = currentHourInTimezone(new Date(), defaultTimezone)) {
-  const quietStart = typeof start === "number" ? start : 20;
-  const quietEnd = typeof end === "number" ? end : 6;
-  if (quietStart === quietEnd) return false;
-  if (quietStart < quietEnd) return hour >= quietStart && hour < quietEnd;
-  return hour >= quietStart || hour < quietEnd;
 }
 
 function mapTaskType(taskType: string): StudyTask["taskType"] {

@@ -55,3 +55,11 @@ export function reminderKeyForStudy(date: string) {
 export function reminderKeyForBursary(bursaryId: string, deadline: string, daysBeforeDeadline: number) {
   return `bursary-${bursaryId}-${deadline}-${daysBeforeDeadline}`;
 }
+
+export function isWithinReminderQuietHours(start?: number | null, end?: number | null, hour = new Date().getHours()) {
+  const quietStart = typeof start === "number" ? start : 20;
+  const quietEnd = typeof end === "number" ? end : 6;
+  if (quietStart === quietEnd) return false;
+  if (quietStart < quietEnd) return hour >= quietStart && hour < quietEnd;
+  return hour >= quietStart || hour < quietEnd;
+}

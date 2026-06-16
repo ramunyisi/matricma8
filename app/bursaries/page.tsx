@@ -48,8 +48,17 @@ const fieldOptions = [
 
 const storageKeys = {
   shortlist: "matricsa-bursary-shortlist",
-  reminders: "matricsa-bursary-reminders"
+  reminders: "matricsa-bursary-reminders",
+  applicationStatus: "matricsa-bursary-application-status"
 };
+
+const applicationStatuses = [
+  "Saved",
+  "Documents needed",
+  "Ready to apply",
+  "Submitted",
+  "Awaiting response"
+];
 
 export default function BursariesPage() {
   const { profile, isDemo } = useLearnerProfile();
@@ -62,6 +71,7 @@ export default function BursariesPage() {
   const [status, setStatus] = useState<"all" | "open" | "closing" | "closed" | "unknown">("all");
   const [shortlist, setShortlist] = useState<string[]>([]);
   const [reminders, setReminders] = useState<Record<string, number>>({});
+  const [applicationStatus, setApplicationStatus] = useState<Record<string, string>>({});
   const [reminderDrafts, setReminderDrafts] = useState<Record<string, number>>({});
   const [isHydrated, setIsHydrated] = useState(false);
   const [isServerReminderSyncEnabled, setIsServerReminderSyncEnabled] = useState(false);
@@ -79,8 +89,10 @@ export default function BursariesPage() {
     try {
       const savedShortlist = window.localStorage.getItem(storageKeys.shortlist);
       const savedReminders = window.localStorage.getItem(storageKeys.reminders);
+      const savedStatus = window.localStorage.getItem(storageKeys.applicationStatus);
       if (savedShortlist) setShortlist(JSON.parse(savedShortlist));
       if (savedReminders) setReminders(JSON.parse(savedReminders));
+      if (savedStatus) setApplicationStatus(JSON.parse(savedStatus));
     } catch {
       // Ignore invalid local storage values.
     }
@@ -112,6 +124,11 @@ export default function BursariesPage() {
     if (!isHydrated || typeof window === "undefined") return;
     window.localStorage.setItem(storageKeys.reminders, JSON.stringify(reminders));
   }, [isHydrated, reminders]);
+
+  useEffect(() => {
+    if (!isHydrated || typeof window === "undefined") return;
+    window.localStorage.setItem(storageKeys.applicationStatus, JSON.stringify(applicationStatus));
+  }, [applicationStatus, isHydrated]);
 
   useEffect(() => {
     if (!hasLoadedInitialReminderState || !isServerReminderSyncEnabled) return;
@@ -195,7 +212,19 @@ export default function BursariesPage() {
   }, [reminders, shortlistEntries]);
 
   function toggleShortlist(id: string) {
-    setShortlist((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    setShortlist((current) => {
+      const isSaved = current.includes(id);
+      if (!isSaved) {
+        setApplicationStatus((statusMap) => ({ ...statusMap, [id]: statusMap[id] ?? "Saved" }));
+        return [...current, id];
+      }
+      setApplicationStatus((statusMap) => {
+        const next = { ...statusMap };
+        delete next[id];
+        return next;
+      });
+      return current.filter((item) => item !== id);
+    });
   }
 
   function setReminder(id: string) {
@@ -361,6 +390,19 @@ export default function BursariesPage() {
                     </button>
                   </div>
 
+                  {isSaved ? (
+                    <label className="mt-4 block text-sm font-bold">
+                      Application status
+                      <select
+                        className="input mt-2"
+                        value={applicationStatus[match.bursary.id] ?? "Saved"}
+                        onChange={(event) => setApplicationStatus((current) => ({ ...current, [match.bursary.id]: event.target.value }))}
+                      >
+                        {applicationStatuses.map((item) => <option key={item}>{item}</option>)}
+                      </select>
+                    </label>
+                  ) : null}
+
                   <div className="mt-4 flex flex-wrap items-end gap-2">
                     <label className="text-sm font-bold">
                       Reminder
@@ -422,6 +464,7 @@ export default function BursariesPage() {
                       <div>
                         <p className="font-black">{bursary.name}</p>
                         <p className="text-xs font-semibold text-ink/55">{bursary.provider}</p>
+                        <p className="mt-1 text-xs font-black text-veld">{applicationStatus[bursary.id] ?? "Saved"}</p>
                       </div>
                       <button type="button" onClick={() => toggleShortlist(bursary.id)} className="text-xs font-black text-ink/60">Remove</button>
                     </div>
@@ -431,6 +474,27 @@ export default function BursariesPage() {
               </ul>
             ) : (
               <p className="mt-4 text-sm leading-6 text-ink/65">Save bursaries here to build a shortlist and keep track of reminders.</p>
+            )}
+          </Card>
+
+          <Card>
+            <h2 className="text-xl font-black">Application tracker</h2>
+            {shortlistEntries.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {applicationStatuses.map((status) => {
+                  const count = shortlistEntries.filter((bursary) => (applicationStatus[bursary.id] ?? "Saved") === status).length;
+                  return (
+                    <div key={status} className="rounded-lg bg-chalk p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-black">{status}</p>
+                        <Badge tone={count > 0 ? "safe" : "sample"}>{count}</Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm leading-6 text-ink/65">Save a bursary to start tracking application progress.</p>
             )}
           </Card>
 
